@@ -16,13 +16,20 @@ const int MAX_CUSTOM_SPEED_LEVEL = 5;
 const int MIN_DIFFICULTY_LEVEL = 1;
 const int MAX_DIFFICULTY_LEVEL = 5;
 const float CUBE_SIZE = 1.0f;
-const int SPEED_UP_SCORE = 50;            // 每获得多少分提高一次速度
-const char* HIGH_SCORE_FILE = "highscore.txt";
+const int SPEED_UP_SCORE = 50; // 每获得多少分提高一次速度
+const char *HIGH_SCORE_FILE = "highscore.txt";
 
 const float FOOD_FLOAT_HEIGHT = 0.15f;
 const float FOOD_FLOAT_SPEED = 4.0f;
 const float EAT_EFFECT_TIME = 0.35f;
 const float SCORE_FLASH_TIME = 0.25f;
+const int SUPER_FOOD_CHANCE = 20;
+const float BOOST_TIME = 8.0f;
+const float RED_FLASH_TIME = 1.0f;
+const float GREEN_FLASH_TIME = 1.0f;
+const float BOOST_SPEED_RATE = 2.0f;
+const float BLUE_FLASH_TIME = 1.5f;
+const int MAX_CRAZY_BLOCKS = 8;
 
 // 主菜单布局常量
 const int MENU_X = 880;
@@ -33,13 +40,23 @@ const int MENU_HEIGHT = 750;
 // ===== 数据结构 =====
 
 // 地图格子坐标
-struct Cell {
+struct Cell
+{
     int x;
     int z;
 };
 
+// 疯狂模式中的蓝色方块
+struct CrazyBlock
+{
+    Cell cell;
+    bool solid;
+    float flashTimer;
+};
+
 // 游戏状态
-enum GameStatus {
+enum GameStatus
+{
     LevelSelect,
     Playing,
     Paused,
@@ -48,26 +65,35 @@ enum GameStatus {
 };
 
 // ===== 游戏全局数据 =====
-std::vector<Cell> snake;      // 蛇身体，snake[0] 是蛇头
-Cell direction;               // 当前移动方向
-Cell nextDirection;           // 下一次移动时使用的方向
-Cell food;                     // 食物位置
-GameStatus gameStatus;         // 游戏状态
-int currentLevel;              // 当前关卡编号：1 到 5，只决定地图大小
-int gridSize;                  // 当前关卡地图大小
-int targetScore;               // 当前关卡目标分数
-int customSpeedLevel;          // 主页面里玩家自己设置的速度等级
-int difficultyLevel;           // 难度等级，控制目标分数高低
-int score;                     // 分数
-int highScore;                 // 最高分
-float moveTimer;               // 移动计时器
-bool gameStarted;              // 是否已开始（第一次按键后开始移动）
-float startMoveInterval;       // 当前关卡初始移动间隔
-float minMoveInterval;         // 当前关卡最快移动间隔
-float speedUpAmount;           // 当前关卡每次加速减少的间隔
-float eatEffectTimer;           // 吃到食物后的特效计时器
-float scoreFlashTimer;          // 分数高亮计时器
-Cell lastFoodCell;              // 最近一次被吃掉的食物位置
+std::vector<Cell> snake;             // 蛇身体，snake[0] 是蛇头
+std::vector<CrazyBlock> crazyBlocks; // 疯狂模式中的蓝色方块
+Cell direction;                      // 当前移动方向
+Cell nextDirection;                  // 下一次移动时使用的方向
+Cell food;                           // 食物位置
+GameStatus gameStatus;               // 游戏状态
+int currentLevel;                    // 当前关卡编号：1 到 5，只决定地图大小
+int gridSize;                        // 当前关卡地图大小
+int targetScore;                     // 当前关卡目标分数
+int customSpeedLevel;                // 主页面里玩家自己设置的速度等级
+int difficultyLevel;                 // 难度等级，控制目标分数高低
+int score;                           // 分数
+int highScore;                       // 最高分
+float moveTimer;                     // 移动计时器
+bool gameStarted;                    // 是否已开始（第一次按键后开始移动）
+float startMoveInterval;             // 当前关卡初始移动间隔
+float minMoveInterval;               // 当前关卡最快移动间隔
+float speedUpAmount;                 // 当前关卡每次加速减少的间隔
+float eatEffectTimer;                // 吃到食物后的特效计时器
+float scoreFlashTimer;               // 分数高亮计时器
+Cell lastFoodCell;                   // 最近一次被吃掉的食物位置
+bool crazyMode;                      // 是否开启疯狂模式
+bool isSuperFood;                    // 当前食物是否是超级果子
+int extraGrowCount;                  // 还需要继续增长的节数
+float crazyEventTimer;               // 疯狂事件倒计时
+float boostTimer;                    // 加速剩余时间
+float redFlashTimer;                 // 红光闪烁剩余时间
+float greenFlashTimer;               // 绿光闪烁剩余时间
+bool boostWaiting;                   // 红光闪烁结束后是否进入加速
 
 // 摄像机
 Camera3D camera;
@@ -87,6 +113,8 @@ void SetTargetScoreByDifficulty();
 void HandleLevelSelectInput();
 bool IsSameCell(Cell a, Cell b);
 bool IsCellOnSnake(Cell cell);
+bool IsCellOnCrazyBlock(Cell cell);
+bool IsCellOnSolidCrazyBlock(Cell cell);
 bool CheckWallCollision(Cell head);
 bool CheckSelfCollision(Cell head, bool willGrow);
 Vector3 CellToWorld(Cell cell);
@@ -97,17 +125,23 @@ void DrawSnakeHead(Vector3 pos);
 void DrawSnakeBody(Vector3 pos, int index, int totalLength);
 void DrawFood();
 void DrawEatEffect();
+void DrawCrazyBlocks();
 void DrawWalls();
-void DrawCenterMessage(const char* title, const char* subtitle, Color titleColor);
+void DrawCenterMessage(const char *title, const char *subtitle, Color titleColor);
 void DrawLevelSelectUI();
-void DrawButton(Rectangle button, const char* text, bool selected);
+void DrawButton(Rectangle button, const char *text, bool selected);
 bool IsButtonClicked(Rectangle button);
 Rectangle GetLevelButtonRect(int index);
 Rectangle GetSpeedMinusButtonRect();
 Rectangle GetSpeedPlusButtonRect();
 Rectangle GetDifficultyMinusButtonRect();
 Rectangle GetDifficultyPlusButtonRect();
+Rectangle GetCrazyModeButtonRect();
 Rectangle GetStartButtonRect();
+void UpdateCrazyMode();
+void TriggerRandomCrazyEvent();
+void StartBoostEvent();
+void StartBlueBlockEvent();
 void TryChangeDirection(Cell newDirection);
 void UpdateEffects();
 void UpdateCameraPosition();
@@ -118,14 +152,44 @@ void UpdateHighScore();
 // ===== 函数实现 =====
 
 // 判断两个格子是否相同
-bool IsSameCell(Cell a, Cell b) {
+bool IsSameCell(Cell a, Cell b)
+{
     return (a.x == b.x) && (a.z == b.z);
 }
 
 // 判断某个格子是否在蛇身上
-bool IsCellOnSnake(Cell cell) {
-    for (int i = 0; i < (int)snake.size(); i++) {
-        if (IsSameCell(snake[i], cell)) {
+bool IsCellOnSnake(Cell cell)
+{
+    for (int i = 0; i < (int)snake.size(); i++)
+    {
+        if (IsSameCell(snake[i], cell))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 判断某个格子是否有蓝色方块
+bool IsCellOnCrazyBlock(Cell cell)
+{
+    for (int i = 0; i < (int)crazyBlocks.size(); i++)
+    {
+        if (IsSameCell(crazyBlocks[i].cell, cell))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 判断某个格子是否有已经变成实体的蓝色方块
+bool IsCellOnSolidCrazyBlock(Cell cell)
+{
+    for (int i = 0; i < (int)crazyBlocks.size(); i++)
+    {
+        if (crazyBlocks[i].solid && IsSameCell(crazyBlocks[i].cell, cell))
+        {
             return true;
         }
     }
@@ -133,22 +197,27 @@ bool IsCellOnSnake(Cell cell) {
 }
 
 // 判断蛇头是否撞墙
-bool CheckWallCollision(Cell head) {
+bool CheckWallCollision(Cell head)
+{
     return (head.x < 0 || head.x >= gridSize ||
             head.z < 0 || head.z >= gridSize);
 }
 
 // 判断蛇头是否撞到自己身体
-bool CheckSelfCollision(Cell head, bool willGrow) {
+bool CheckSelfCollision(Cell head, bool willGrow)
+{
     // 没吃到食物时，尾巴会离开原来的格子，所以最后一节可以不检查
     int checkEnd = (int)snake.size();
-    if (!willGrow) {
+    if (!willGrow)
+    {
         checkEnd--;
     }
 
     // 从索引 1 开始检查，因为索引 0 是蛇头自己
-    for (int i = 1; i < checkEnd; i++) {
-        if (IsSameCell(snake[i], head)) {
+    for (int i = 1; i < checkEnd; i++)
+    {
+        if (IsSameCell(snake[i], head))
+        {
             return true;
         }
     }
@@ -156,30 +225,40 @@ bool CheckSelfCollision(Cell head, bool willGrow) {
 }
 
 // 将地图格子坐标转换为 3D 世界坐标
-Vector3 CellToWorld(Cell cell) {
+Vector3 CellToWorld(Cell cell)
+{
     float worldX = (cell.x - gridSize / 2.0f + 0.5f) * CUBE_SIZE;
     float worldZ = (cell.z - gridSize / 2.0f + 0.5f) * CUBE_SIZE;
     return (Vector3){worldX, 0.5f, worldZ};
 }
 
 // 根据分数计算当前移动间隔
-float GetCurrentMoveInterval() {
+float GetCurrentMoveInterval()
+{
     int speedLevel = score / SPEED_UP_SCORE;
     float interval = startMoveInterval - speedLevel * speedUpAmount;
 
-    if (interval < minMoveInterval) {
+    if (interval < minMoveInterval)
+    {
         interval = minMoveInterval;
+    }
+
+    if (boostTimer > 0.0f)
+    {
+        interval = interval / BOOST_SPEED_RATE;
     }
 
     return interval;
 }
 
 // 读取最高分文件。如果文件不存在，就从 0 分开始。
-int LoadHighScore() {
+int LoadHighScore()
+{
     int savedScore = 0;
     std::ifstream inputFile(HIGH_SCORE_FILE);
 
-    if (inputFile.is_open()) {
+    if (inputFile.is_open())
+    {
         inputFile >> savedScore;
         inputFile.close();
     }
@@ -188,42 +267,56 @@ int LoadHighScore() {
 }
 
 // 保存最高分到文本文件
-void SaveHighScore() {
+void SaveHighScore()
+{
     std::ofstream outputFile(HIGH_SCORE_FILE);
 
-    if (outputFile.is_open()) {
+    if (outputFile.is_open())
+    {
         outputFile << highScore;
         outputFile.close();
     }
 }
 
 // 如果当前分数超过最高分，就更新并保存
-void UpdateHighScore() {
-    if (score > highScore) {
+void UpdateHighScore()
+{
+    if (score > highScore)
+    {
         highScore = score;
         SaveHighScore();
     }
 }
 
 // 根据速度等级设置移动速度。等级越高，蛇移动越快。
-void SetSpeedByLevel(int speedLevel) {
-    if (speedLevel <= 1) {
+void SetSpeedByLevel(int speedLevel)
+{
+    if (speedLevel <= 1)
+    {
         startMoveInterval = 0.28f;
         minMoveInterval = 0.14f;
         speedUpAmount = 0.006f;
-    } else if (speedLevel == 2) {
+    }
+    else if (speedLevel == 2)
+    {
         startMoveInterval = 0.22f;
         minMoveInterval = 0.11f;
         speedUpAmount = 0.008f;
-    } else if (speedLevel == 4) {
+    }
+    else if (speedLevel == 4)
+    {
         startMoveInterval = 0.14f;
         minMoveInterval = 0.07f;
         speedUpAmount = 0.012f;
-    } else if (speedLevel >= 5) {
+    }
+    else if (speedLevel >= 5)
+    {
         startMoveInterval = 0.10f;
         minMoveInterval = 0.05f;
         speedUpAmount = 0.014f;
-    } else {
+    }
+    else
+    {
         startMoveInterval = 0.18f;
         minMoveInterval = 0.08f;
         speedUpAmount = 0.01f;
@@ -231,45 +324,58 @@ void SetSpeedByLevel(int speedLevel) {
 }
 
 // 设置关卡参数。关卡只决定地图大小。
-void SetLevel(int level) {
+void SetLevel(int level)
+{
     currentLevel = level;
 
-    if (level == 1) {
+    if (level == 1)
+    {
         gridSize = 10;
-    } else if (level == 2) {
+    }
+    else if (level == 2)
+    {
         gridSize = 15;
-    } else if (level == 3) {
+    }
+    else if (level == 3)
+    {
         gridSize = 20;
-    } else if (level == 4) {
+    }
+    else if (level == 4)
+    {
         gridSize = 25;
-    } else {
+    }
+    else
+    {
         currentLevel = 1;
         gridSize = DEFAULT_GRID_SIZE;
     }
 }
 
 // 难度越高，目标分数越高。
-void SetTargetScoreByDifficulty() {
+void SetTargetScoreByDifficulty()
+{
     targetScore = gridSize * difficultyLevel * 2;
 }
 
 // 使用主页面选择的地图、速度和难度开始游戏
-void StartSelectedGame() {
+void StartSelectedGame()
+{
     SetLevel(currentLevel);
     SetSpeedByLevel(customSpeedLevel);
     SetTargetScoreByDifficulty();
 }
 
 // 初始化游戏数据
-void InitGame() {
+void InitGame()
+{
     // 清空蛇身
     snake.clear();
 
     // 蛇初始位置：放在地图中央，朝右
     Cell start = {gridSize / 2, gridSize / 2};
-    snake.push_back(start);                     // 蛇头
-    snake.push_back({start.x - 1, start.z});    // 身体
-    snake.push_back({start.x - 2, start.z});    // 身体
+    snake.push_back(start);                  // 蛇头
+    snake.push_back({start.x - 1, start.z}); // 身体
+    snake.push_back({start.x - 2, start.z}); // 身体
 
     // 初始方向：向右
     direction = {1, 0};
@@ -291,29 +397,44 @@ void InitGame() {
     eatEffectTimer = 0.0f;
     scoreFlashTimer = 0.0f;
     lastFoodCell = {-1, -1};
+    extraGrowCount = 0;
+    crazyBlocks.clear();
+    crazyEventTimer = 3.0f;
+    boostTimer = 0.0f;
+    redFlashTimer = 0.0f;
+    greenFlashTimer = 0.0f;
+    boostWaiting = false;
 
     // 生成第一个食物
     SpawnFood();
 }
 
 // 随机生成食物（确保不在蛇身上）
-void SpawnFood() {
+void SpawnFood()
+{
     // 收集所有不在蛇身上的空格子
     std::vector<Cell> emptyCells;
-    for (int x = 0; x < gridSize; x++) {
-        for (int z = 0; z < gridSize; z++) {
+    for (int x = 0; x < gridSize; x++)
+    {
+        for (int z = 0; z < gridSize; z++)
+        {
             Cell cell = {x, z};
-            if (!IsCellOnSnake(cell)) {
+            if (!IsCellOnSnake(cell) && !IsCellOnCrazyBlock(cell))
+            {
                 emptyCells.push_back(cell);
             }
         }
     }
 
     // 如果有空格子，随机选一个
-    if (!emptyCells.empty()) {
+    if (!emptyCells.empty())
+    {
         int index = rand() % emptyCells.size();
         food = emptyCells[index];
-    } else {
+        isSuperFood = (rand() % 100 < SUPER_FOOD_CHANCE);
+    }
+    else
+    {
         // 没有空格子，说明蛇已经占满地图，玩家获胜
         food = {-1, -1};
         gameStatus = Win;
@@ -323,7 +444,8 @@ void SpawnFood() {
 
 // ===== 主菜单按钮坐标函数 =====
 
-Rectangle GetLevelButtonRect(int index) {
+Rectangle GetLevelButtonRect(int index)
+{
     int buttonWidth = 155;
     int buttonHeight = 65;
     int buttonGap = 25;
@@ -334,82 +456,115 @@ Rectangle GetLevelButtonRect(int index) {
         (float)(startX + index * (buttonWidth + buttonGap)),
         (float)y,
         (float)buttonWidth,
-        (float)buttonHeight
-    };
+        (float)buttonHeight};
 }
 
-Rectangle GetSpeedMinusButtonRect() {
-    return { (float)(MENU_X + 110), (float)(MENU_Y + 400), 65.0f, 50.0f };
+Rectangle GetSpeedMinusButtonRect()
+{
+    return {(float)(MENU_X + 110), (float)(MENU_Y + 400), 65.0f, 50.0f};
 }
 
-Rectangle GetSpeedPlusButtonRect() {
-    return { (float)(MENU_X + MENU_WIDTH - 175), (float)(MENU_Y + 400), 65.0f, 50.0f };
+Rectangle GetSpeedPlusButtonRect()
+{
+    return {(float)(MENU_X + MENU_WIDTH - 175), (float)(MENU_Y + 400), 65.0f, 50.0f};
 }
 
-Rectangle GetDifficultyMinusButtonRect() {
-    return { (float)(MENU_X + 110), (float)(MENU_Y + 550), 65.0f, 50.0f };
+Rectangle GetDifficultyMinusButtonRect()
+{
+    return {(float)(MENU_X + 110), (float)(MENU_Y + 550), 65.0f, 50.0f};
 }
 
-Rectangle GetDifficultyPlusButtonRect() {
-    return { (float)(MENU_X + MENU_WIDTH - 175), (float)(MENU_Y + 550), 65.0f, 50.0f };
+Rectangle GetDifficultyPlusButtonRect()
+{
+    return {(float)(MENU_X + MENU_WIDTH - 175), (float)(MENU_Y + 550), 65.0f, 50.0f};
 }
 
-Rectangle GetStartButtonRect() {
+Rectangle GetCrazyModeButtonRect()
+{
+    int buttonWidth = 260;
+    int buttonHeight = 55;
+    return {
+        (float)(MENU_X + (MENU_WIDTH - buttonWidth) / 2),
+        (float)(MENU_Y + 615),
+        (float)buttonWidth,
+        (float)buttonHeight};
+}
+
+Rectangle GetStartButtonRect()
+{
     int buttonWidth = 240;
     int buttonHeight = 70;
     return {
         (float)(MENU_X + (MENU_WIDTH - buttonWidth) / 2),
-        (float)(MENU_Y + 650),
+        (float)(MENU_Y + 680),
         (float)buttonWidth,
-        (float)buttonHeight
-    };
+        (float)buttonHeight};
 }
 
 // 在主页面处理鼠标点击
-void HandleLevelSelectInput() {
-    for (int i = 0; i < 4; i++) {
-        if (IsButtonClicked(GetLevelButtonRect(i))) {
+void HandleLevelSelectInput()
+{
+    for (int i = 0; i < 4; i++)
+    {
+        if (IsButtonClicked(GetLevelButtonRect(i)))
+        {
             SetLevel(i + 1);
         }
     }
 
-    if (IsButtonClicked(GetSpeedMinusButtonRect())) {
+    if (IsButtonClicked(GetSpeedMinusButtonRect()))
+    {
         customSpeedLevel--;
-        if (customSpeedLevel < MIN_CUSTOM_SPEED_LEVEL) {
+        if (customSpeedLevel < MIN_CUSTOM_SPEED_LEVEL)
+        {
             customSpeedLevel = MIN_CUSTOM_SPEED_LEVEL;
         }
     }
-    if (IsButtonClicked(GetSpeedPlusButtonRect())) {
+    if (IsButtonClicked(GetSpeedPlusButtonRect()))
+    {
         customSpeedLevel++;
-        if (customSpeedLevel > MAX_CUSTOM_SPEED_LEVEL) {
+        if (customSpeedLevel > MAX_CUSTOM_SPEED_LEVEL)
+        {
             customSpeedLevel = MAX_CUSTOM_SPEED_LEVEL;
         }
     }
 
-    if (IsButtonClicked(GetDifficultyMinusButtonRect())) {
+    if (IsButtonClicked(GetDifficultyMinusButtonRect()))
+    {
         difficultyLevel--;
-        if (difficultyLevel < MIN_DIFFICULTY_LEVEL) {
+        if (difficultyLevel < MIN_DIFFICULTY_LEVEL)
+        {
             difficultyLevel = MIN_DIFFICULTY_LEVEL;
         }
     }
-    if (IsButtonClicked(GetDifficultyPlusButtonRect())) {
+    if (IsButtonClicked(GetDifficultyPlusButtonRect()))
+    {
         difficultyLevel++;
-        if (difficultyLevel > MAX_DIFFICULTY_LEVEL) {
+        if (difficultyLevel > MAX_DIFFICULTY_LEVEL)
+        {
             difficultyLevel = MAX_DIFFICULTY_LEVEL;
         }
     }
 
-    if (IsButtonClicked(GetStartButtonRect())) {
+    if (IsButtonClicked(GetCrazyModeButtonRect()))
+    {
+        crazyMode = !crazyMode;
+    }
+
+    if (IsButtonClicked(GetStartButtonRect()))
+    {
         StartSelectedGame();
         InitGame();
     }
 }
 
 // 尝试改变蛇的移动方向
-void TryChangeDirection(Cell newDirection) {
+void TryChangeDirection(Cell newDirection)
+{
     // 不允许直接反方向移动
     if (newDirection.x + direction.x == 0 &&
-        newDirection.z + direction.z == 0) {
+        newDirection.z + direction.z == 0)
+    {
         return;
     }
 
@@ -418,14 +573,17 @@ void TryChangeDirection(Cell newDirection) {
 }
 
 // 处理键盘输入
-void HandleInput() {
-    if (gameStatus == LevelSelect) {
+void HandleInput()
+{
+    if (gameStatus == LevelSelect)
+    {
         HandleLevelSelectInput();
         return;
     }
 
     // 返回主页面
-    if (IsKeyPressed(KEY_M)) {
+    if (IsKeyPressed(KEY_M))
+    {
         gameStatus = LevelSelect;
         gameStarted = false;
         snake.clear();
@@ -434,36 +592,46 @@ void HandleInput() {
     }
 
     // 方向控制
-    if (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP)) {
+    if (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP))
+    {
         TryChangeDirection({0, -1});
     }
-    if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN)) {
+    if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN))
+    {
         TryChangeDirection({0, 1});
     }
-    if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT)) {
+    if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT))
+    {
         TryChangeDirection({-1, 0});
     }
-    if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT)) {
+    if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT))
+    {
         TryChangeDirection({1, 0});
     }
 
     // 暂停 / 继续
-    if (IsKeyPressed(KEY_SPACE)) {
-        if (gameStatus == Playing) {
+    if (IsKeyPressed(KEY_SPACE))
+    {
+        if (gameStatus == Playing)
+        {
             gameStatus = Paused;
-        } else if (gameStatus == Paused) {
+        }
+        else if (gameStatus == Paused)
+        {
             gameStatus = Playing;
         }
     }
 
     // 重新开始
-    if (IsKeyPressed(KEY_R)) {
+    if (IsKeyPressed(KEY_R))
+    {
         InitGame();
     }
 }
 
 // 移动蛇一格
-void MoveSnake() {
+void MoveSnake()
+{
     // 使用玩家最近一次输入的方向
     direction = nextDirection;
 
@@ -474,8 +642,36 @@ void MoveSnake() {
 
     bool willGrow = IsSameCell(newHead, food);
 
+    bool canPassWall = crazyMode && boostTimer > 0.0f;
+
+    // 疯狂模式加速期间可以从地图边界穿越到另一边
+    if (canPassWall)
+    {
+        if (newHead.x < 0)
+        {
+            newHead.x = gridSize - 1;
+        }
+        if (newHead.x >= gridSize)
+        {
+            newHead.x = 0;
+        }
+        if (newHead.z < 0)
+        {
+            newHead.z = gridSize - 1;
+        }
+        if (newHead.z >= gridSize)
+        {
+            newHead.z = 0;
+        }
+    }
+
+    willGrow = IsSameCell(newHead, food);
+
     // 检查碰撞
-    if (CheckWallCollision(newHead) || CheckSelfCollision(newHead, willGrow)) {
+    if ((!canPassWall && CheckWallCollision(newHead)) ||
+        CheckSelfCollision(newHead, willGrow) ||
+        IsCellOnSolidCrazyBlock(newHead))
+    {
         gameStatus = GameOver;
         return;
     }
@@ -484,30 +680,52 @@ void MoveSnake() {
     snake.insert(snake.begin(), newHead);
 
     // 判断是否吃到食物
-    if (IsSameCell(newHead, food)) {
+    if (IsSameCell(newHead, food))
+    {
         lastFoodCell = food;
         eatEffectTimer = EAT_EFFECT_TIME;
         scoreFlashTimer = SCORE_FLASH_TIME;
-        score += 10;
+
+        if (isSuperFood)
+        {
+            score += 50;
+            extraGrowCount += 5;
+        }
+        else
+        {
+            score += 10;
+            extraGrowCount += 1;
+        }
+
         UpdateHighScore();
 
-        if (score >= targetScore) {
+        if (!crazyMode && score >= targetScore)
+        {
             gameStatus = Win;
             food = {-1, -1};
-        } else {
+        }
+        else
+        {
             SpawnFood();
         }
-        // 吃到食物时不移除尾部，蛇身自然变长
-    } else {
-        // 没吃到食物则移除尾部，保持蛇身长度不变
+    }
+
+    if (extraGrowCount > 0)
+    {
+        extraGrowCount--;
+    }
+    else
+    {
         snake.pop_back();
     }
 }
 
 // 更新游戏逻辑
-void UpdateGame() {
+void UpdateGame()
+{
     // 只有游戏进行中且已开始才更新
-    if (gameStatus != Playing || !gameStarted) {
+    if (gameStatus != Playing || !gameStarted)
+    {
         return;
     }
 
@@ -515,33 +733,178 @@ void UpdateGame() {
     moveTimer += GetFrameTime();
 
     // 到达移动间隔时移动蛇
-    if (moveTimer >= GetCurrentMoveInterval()) {
+    if (moveTimer >= GetCurrentMoveInterval())
+    {
         moveTimer = 0.0f;
         MoveSnake();
     }
 }
 
 // 更新一些简单的临时动画计时器
-void UpdateEffects() {
+void UpdateEffects()
+{
     float deltaTime = GetFrameTime();
 
-    if (eatEffectTimer > 0.0f) {
+    if (eatEffectTimer > 0.0f)
+    {
         eatEffectTimer -= deltaTime;
-        if (eatEffectTimer < 0.0f) {
+        if (eatEffectTimer < 0.0f)
+        {
             eatEffectTimer = 0.0f;
         }
     }
 
-    if (scoreFlashTimer > 0.0f) {
+    if (scoreFlashTimer > 0.0f)
+    {
         scoreFlashTimer -= deltaTime;
-        if (scoreFlashTimer < 0.0f) {
+        if (scoreFlashTimer < 0.0f)
+        {
             scoreFlashTimer = 0.0f;
         }
     }
 }
 
+// 更新疯狂模式事件
+void UpdateCrazyMode()
+{
+    if (!crazyMode || gameStatus != Playing)
+    {
+        return;
+    }
+
+    float deltaTime = GetFrameTime();
+
+    if (boostTimer > 0.0f)
+    {
+        boostTimer -= deltaTime;
+        if (boostTimer <= 0.0f)
+        {
+            boostTimer = 0.0f;
+            greenFlashTimer = GREEN_FLASH_TIME;
+        }
+    }
+
+    if (redFlashTimer > 0.0f)
+    {
+        redFlashTimer -= deltaTime;
+        if (redFlashTimer < 0.0f)
+        {
+            redFlashTimer = 0.0f;
+        }
+
+        if (redFlashTimer == 0.0f && boostWaiting)
+        {
+            boostTimer = BOOST_TIME;
+            boostWaiting = false;
+        }
+    }
+
+    if (greenFlashTimer > 0.0f)
+    {
+        greenFlashTimer -= deltaTime;
+        if (greenFlashTimer < 0.0f)
+        {
+            greenFlashTimer = 0.0f;
+        }
+    }
+
+    for (int i = 0; i < (int)crazyBlocks.size(); i++)
+    {
+        if (!crazyBlocks[i].solid)
+        {
+            crazyBlocks[i].flashTimer -= deltaTime;
+            if (crazyBlocks[i].flashTimer <= 0.0f)
+            {
+                crazyBlocks[i].flashTimer = 0.0f;
+                crazyBlocks[i].solid = true;
+            }
+        }
+    }
+
+    crazyEventTimer -= deltaTime;
+    if (crazyEventTimer <= 0.0f)
+    {
+        bool boostIsActive = redFlashTimer > 0.0f ||
+                             boostTimer > 0.0f ||
+                             greenFlashTimer > 0.0f ||
+                             boostWaiting;
+
+        if (boostIsActive)
+        {
+            // 加速流程还没完全结束时，只生成蓝方块，不再排队新的加速。
+            StartBlueBlockEvent();
+        }
+        else
+        {
+            TriggerRandomCrazyEvent();
+        }
+
+        crazyEventTimer = 2.0f + (float)(rand() % 3);
+    }
+}
+
+// 随机触发一个疯狂事件
+void TriggerRandomCrazyEvent()
+{
+    if (rand() % 2 == 0)
+    {
+        StartBoostEvent();
+    }
+    else
+    {
+        StartBlueBlockEvent();
+    }
+}
+
+// 开始红光加速事件
+void StartBoostEvent()
+{
+    if (redFlashTimer > 0.0f || boostTimer > 0.0f || greenFlashTimer > 0.0f || boostWaiting)
+    {
+        return;
+    }
+
+    redFlashTimer = RED_FLASH_TIME;
+    boostWaiting = true;
+}
+
+// 生成一个蓝光方块
+void StartBlueBlockEvent()
+{
+    if ((int)crazyBlocks.size() >= MAX_CRAZY_BLOCKS)
+    {
+        return;
+    }
+
+    std::vector<Cell> emptyCells;
+    for (int x = 0; x < gridSize; x++)
+    {
+        for (int z = 0; z < gridSize; z++)
+        {
+            Cell cell = {x, z};
+            if (!IsCellOnSnake(cell) &&
+                !IsSameCell(cell, food) &&
+                !IsCellOnCrazyBlock(cell))
+            {
+                emptyCells.push_back(cell);
+            }
+        }
+    }
+
+    if (!emptyCells.empty())
+    {
+        int index = rand() % emptyCells.size();
+        CrazyBlock block;
+        block.cell = emptyCells[index];
+        block.solid = false;
+        block.flashTimer = BLUE_FLASH_TIME;
+        crazyBlocks.push_back(block);
+    }
+}
+
 // 设置固定摄像机位置
-void UpdateCameraPosition() {
+void UpdateCameraPosition()
+{
     camera.position = (Vector3){0.0f, 22.0f, 24.0f};
     camera.target = (Vector3){0.0f, 0.0f, 0.0f};
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
@@ -550,17 +913,23 @@ void UpdateCameraPosition() {
 }
 
 // 绘制地面网格
-void DrawGridGround() {
+void DrawGridGround()
+{
     // 用棋盘格让地图方向和格子更清楚
-    for (int x = 0; x < gridSize; x++) {
-        for (int z = 0; z < gridSize; z++) {
+    for (int x = 0; x < gridSize; x++)
+    {
+        for (int z = 0; z < gridSize; z++)
+        {
             float worldX = (x - gridSize / 2.0f + 0.5f) * CUBE_SIZE;
             float worldZ = (z - gridSize / 2.0f + 0.5f) * CUBE_SIZE;
 
             Color color;
-            if ((x + z) % 2 == 0) {
+            if ((x + z) % 2 == 0)
+            {
                 color = (Color){46, 54, 64, 255};
-            } else {
+            }
+            else
+            {
                 color = (Color){38, 45, 55, 255};
             }
 
@@ -571,8 +940,23 @@ void DrawGridGround() {
 }
 
 // 绘制蛇头。眼睛会跟随移动方向变化。
-void DrawSnakeHead(Vector3 pos) {
-    DrawCube(pos, CUBE_SIZE * 0.92f, CUBE_SIZE * 0.92f, CUBE_SIZE * 0.92f, (Color){28, 150, 75, 255});
+void DrawSnakeHead(Vector3 pos)
+{
+    Color headColor = (Color){28, 150, 75, 255};
+    if (boostTimer > 0.0f)
+    {
+        headColor = RED;
+    }
+    else if (redFlashTimer > 0.0f && ((int)(GetTime() * 10) % 2 == 0))
+    {
+        headColor = RED;
+    }
+    else if (greenFlashTimer > 0.0f && ((int)(GetTime() * 10) % 2 == 0))
+    {
+        headColor = LIME;
+    }
+
+    DrawCube(pos, CUBE_SIZE * 0.92f, CUBE_SIZE * 0.92f, CUBE_SIZE * 0.92f, headColor);
     DrawCubeWires(pos, CUBE_SIZE * 0.92f, CUBE_SIZE * 0.92f, CUBE_SIZE * 0.92f, BLACK);
 
     float eyeOffsetSide = 0.18f;
@@ -582,12 +966,15 @@ void DrawSnakeHead(Vector3 pos) {
     Vector3 leftEye = pos;
     Vector3 rightEye = pos;
 
-    if (direction.x != 0) {
+    if (direction.x != 0)
+    {
         leftEye.x += direction.x * eyeOffsetFront;
         rightEye.x += direction.x * eyeOffsetFront;
         leftEye.z -= eyeOffsetSide;
         rightEye.z += eyeOffsetSide;
-    } else {
+    }
+    else
+    {
         leftEye.z += direction.z * eyeOffsetFront;
         rightEye.z += direction.z * eyeOffsetFront;
         leftEye.x -= eyeOffsetSide;
@@ -604,39 +991,62 @@ void DrawSnakeHead(Vector3 pos) {
 }
 
 // 绘制蛇身。越靠近尾巴，方块稍微小一点。
-void DrawSnakeBody(Vector3 pos, int index, int totalLength) {
+void DrawSnakeBody(Vector3 pos, int index, int totalLength)
+{
     float size = CUBE_SIZE * 0.84f;
-    if (totalLength > 1) {
+    if (totalLength > 1)
+    {
         float tailProgress = (float)index / (float)(totalLength - 1);
         size = CUBE_SIZE * (0.86f - tailProgress * 0.14f);
     }
 
     int green = 180 - index * 3;
-    if (green < 95) {
+    if (green < 95)
+    {
         green = 95;
     }
 
     Color bodyColor = (Color){55, (unsigned char)green, 85, 255};
+    if (boostTimer > 0.0f)
+    {
+        bodyColor = RED;
+    }
+    else if (redFlashTimer > 0.0f && ((int)(GetTime() * 10) % 2 == 0))
+    {
+        bodyColor = RED;
+    }
+    else if (greenFlashTimer > 0.0f && ((int)(GetTime() * 10) % 2 == 0))
+    {
+        bodyColor = LIME;
+    }
+
     DrawCube(pos, size, size, size, bodyColor);
     DrawCubeWires(pos, size, size, size, (Color){10, 40, 20, 255});
 }
 
 // 绘制蛇
-void DrawSnake() {
-    for (int i = 0; i < (int)snake.size(); i++) {
+void DrawSnake()
+{
+    for (int i = 0; i < (int)snake.size(); i++)
+    {
         Vector3 pos = CellToWorld(snake[i]);
 
-        if (i == 0) {
+        if (i == 0)
+        {
             DrawSnakeHead(pos);
-        } else {
+        }
+        else
+        {
             DrawSnakeBody(pos, i, (int)snake.size());
         }
     }
 }
 
 // 绘制食物
-void DrawFood() {
-    if (food.x < 0 || food.z < 0) {
+void DrawFood()
+{
+    if (food.x < 0 || food.z < 0)
+    {
         return;
     }
 
@@ -646,16 +1056,25 @@ void DrawFood() {
     float pulse = (sinf((float)GetTime() * 6.0f) + 1.0f) * 0.5f;
     float ringRadius = CUBE_SIZE * (0.48f + pulse * 0.12f);
 
-    // 用红色球体表示食物，比方块更醒目
-    DrawSphere(pos, CUBE_SIZE * 0.4f, RED);
-    // 食物加发光感的外圈
-    DrawSphereWires(pos, ringRadius, 10, 10, (Color){255, 170, 120, 255});
-    DrawCylinder((Vector3){pos.x, 0.02f, pos.z}, ringRadius, ringRadius, 0.03f, 24, (Color){180, 45, 45, 120});
+    if (isSuperFood)
+    {
+        DrawSphere(pos, CUBE_SIZE * 0.52f, GOLD);
+        DrawSphereWires(pos, ringRadius + 0.12f, 10, 10, ORANGE);
+        DrawCylinder((Vector3){pos.x, 0.02f, pos.z}, ringRadius + 0.1f, ringRadius + 0.1f, 0.03f, 24, (Color){230, 190, 60, 130});
+    }
+    else
+    {
+        DrawSphere(pos, CUBE_SIZE * 0.4f, RED);
+        DrawSphereWires(pos, ringRadius, 10, 10, (Color){255, 170, 120, 255});
+        DrawCylinder((Vector3){pos.x, 0.02f, pos.z}, ringRadius, ringRadius, 0.03f, 24, (Color){180, 45, 45, 120});
+    }
 }
 
 // 绘制吃到食物后的短暂扩散效果
-void DrawEatEffect() {
-    if (eatEffectTimer <= 0.0f || lastFoodCell.x < 0 || lastFoodCell.z < 0) {
+void DrawEatEffect()
+{
+    if (eatEffectTimer <= 0.0f || lastFoodCell.x < 0 || lastFoodCell.z < 0)
+    {
         return;
     }
 
@@ -667,22 +1086,52 @@ void DrawEatEffect() {
     DrawSphereWires(pos, radius, 12, 12, (Color){255, 210, 80, alpha});
 }
 
+// 绘制疯狂模式中的蓝色方块
+void DrawCrazyBlocks()
+{
+    for (int i = 0; i < (int)crazyBlocks.size(); i++)
+    {
+        Vector3 pos = CellToWorld(crazyBlocks[i].cell);
+
+        if (!crazyBlocks[i].solid)
+        {
+            if ((int)(GetTime() * 8) % 2 == 0)
+            {
+                DrawCube(pos, CUBE_SIZE * 0.9f, CUBE_SIZE * 0.9f, CUBE_SIZE * 0.9f, SKYBLUE);
+                DrawCubeWires(pos, CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, BLUE);
+            }
+        }
+        else
+        {
+            DrawCube(pos, CUBE_SIZE * 0.95f, CUBE_SIZE * 0.95f, CUBE_SIZE * 0.95f, BLUE);
+            DrawCubeWires(pos, CUBE_SIZE * 0.95f, CUBE_SIZE * 0.95f, CUBE_SIZE * 0.95f, DARKBLUE);
+        }
+    }
+}
+
 // 绘制墙壁边框
-void DrawWalls() {
+void DrawWalls()
+{
     float half = gridSize * CUBE_SIZE / 2.0f;
-    float edge = half + 0.5f;  // 墙壁放在可行走区域外侧
+    float edge = half + 0.5f; // 墙壁放在可行走区域外侧
     float y = 0.5f;
+    Color wallColor = (Color){110, 118, 128, 230};
+    if (crazyMode && boostTimer > 0.0f)
+    {
+        wallColor = (Color){220, 90, 90, 160};
+    }
 
     // 在四条边界画矮墙，表示地图边界
-    for (int i = 0; i < gridSize; i++) {
+    for (int i = 0; i < gridSize; i++)
+    {
         float offset = (i - gridSize / 2.0f + 0.5f) * CUBE_SIZE;
 
         // 上边界、下边界
-        DrawCube((Vector3){offset, y, -edge}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, (Color){110, 118, 128, 230});
-        DrawCube((Vector3){offset, y, edge}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, (Color){110, 118, 128, 230});
+        DrawCube((Vector3){offset, y, -edge}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, wallColor);
+        DrawCube((Vector3){offset, y, edge}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, wallColor);
         // 左边界、右边界
-        DrawCube((Vector3){-edge, y, offset}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, (Color){110, 118, 128, 230});
-        DrawCube((Vector3){edge, y, offset}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, (Color){110, 118, 128, 230});
+        DrawCube((Vector3){-edge, y, offset}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, wallColor);
+        DrawCube((Vector3){edge, y, offset}, CUBE_SIZE, CUBE_SIZE * 1.2f, CUBE_SIZE, wallColor);
     }
 
     // 四个角落做成明显一些的标记，方便旋转视角后辨认地图方向
@@ -694,16 +1143,19 @@ void DrawWalls() {
 }
 
 // 绘制 3D 场景
-void DrawGame3D() {
+void DrawGame3D()
+{
     DrawGridGround();
     DrawWalls();
+    DrawCrazyBlocks();
     DrawFood();
     DrawEatEffect();
     DrawSnake();
 }
 
 // 绘制居中的状态提示，暂停、失败、胜利都可以复用
-void DrawCenterMessage(const char* title, const char* subtitle, Color titleColor) {
+void DrawCenterMessage(const char *title, const char *subtitle, Color titleColor)
+{
     int boxWidth = 520;
     int boxHeight = 170;
     int boxX = (SCREEN_WIDTH - boxWidth) / 2;
@@ -722,24 +1174,29 @@ void DrawCenterMessage(const char* title, const char* subtitle, Color titleColor
 }
 
 // 判断按钮是否被鼠标左键点击
-bool IsButtonClicked(Rectangle button) {
+bool IsButtonClicked(Rectangle button)
+{
     return CheckCollisionPointRec(GetMousePosition(), button) &&
            IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
 // 绘制一个简单按钮
-void DrawButton(Rectangle button, const char* text, bool selected) {
+void DrawButton(Rectangle button, const char *text, bool selected)
+{
     bool mouseOver = CheckCollisionPointRec(GetMousePosition(), button);
 
     Color fillColor = (Color){45, 55, 70, 230};
     Color lineColor = (Color){170, 180, 195, 220};
     Color textColor = LIGHTGRAY;
 
-    if (selected) {
+    if (selected)
+    {
         fillColor = (Color){60, 120, 80, 240};
         lineColor = (Color){230, 230, 160, 255};
         textColor = WHITE;
-    } else if (mouseOver) {
+    }
+    else if (mouseOver)
+    {
         fillColor = (Color){65, 75, 92, 240};
         textColor = WHITE;
     }
@@ -755,24 +1212,26 @@ void DrawButton(Rectangle button, const char* text, bool selected) {
 }
 
 // 绘制简单选关界面
-void DrawLevelSelectUI() {
+void DrawLevelSelectUI()
+{
     // 半透明菜单面板
     DrawRectangle(MENU_X, MENU_Y, MENU_WIDTH, MENU_HEIGHT, (Color){10, 15, 30, 200});
     DrawRectangleLines(MENU_X, MENU_Y, MENU_WIDTH, MENU_HEIGHT, (Color){180, 180, 200, 160});
 
     // 标题
-    const char* title = "SNAKE MENU";
+    const char *title = "SNAKE MENU";
     int titleSize = 72;
     int titleWidth = MeasureText(title, titleSize);
     DrawText(title, (SCREEN_WIDTH - titleWidth) / 2, MENU_Y + 50, titleSize, YELLOW);
 
     // 地图关卡区域
-    const char* mapLabel = "Choose Map";
+    const char *mapLabel = "Choose Map";
     int mapLabelSize = 32;
     int mapLabelWidth = MeasureText(mapLabel, mapLabelSize);
     DrawText(mapLabel, (SCREEN_WIDTH - mapLabelWidth) / 2, MENU_Y + 140, mapLabelSize, WHITE);
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++)
+    {
         Rectangle btn = GetLevelButtonRect(i);
         std::string text = "Level " + std::to_string(i + 1);
         DrawButton(btn, text.c_str(), currentLevel == i + 1);
@@ -786,7 +1245,7 @@ void DrawLevelSelectUI() {
     }
 
     // 速度调节区域
-    const char* speedLabel = "Speed";
+    const char *speedLabel = "Speed";
     int speedLabelSize = 32;
     int speedLabelWidth = MeasureText(speedLabel, speedLabelSize);
     DrawText(speedLabel, (SCREEN_WIDTH - speedLabelWidth) / 2, MENU_Y + 340, speedLabelSize, WHITE);
@@ -799,7 +1258,7 @@ void DrawLevelSelectUI() {
     DrawText(speedText.c_str(), (SCREEN_WIDTH - speedTextWidth) / 2, MENU_Y + 408, speedTextSize, WHITE);
 
     // 难度目标区域
-    const char* diffLabel = "Difficulty Target";
+    const char *diffLabel = "Difficulty Target";
     int diffLabelSize = 32;
     int diffLabelWidth = MeasureText(diffLabel, diffLabelSize);
     DrawText(diffLabel, (SCREEN_WIDTH - diffLabelWidth) / 2, MENU_Y + 490, diffLabelSize, WHITE);
@@ -814,12 +1273,25 @@ void DrawLevelSelectUI() {
     DrawText(difficultyText.c_str(), (SCREEN_WIDTH - diffTextWidth) / 2, MENU_Y + 558, diffTextSize, WHITE);
 
     // 开始按钮
+    std::string crazyText = "Crazy Mode: ";
+    if (crazyMode)
+    {
+        crazyText += "ON";
+    }
+    else
+    {
+        crazyText += "OFF";
+    }
+    DrawButton(GetCrazyModeButtonRect(), crazyText.c_str(), crazyMode);
+
     DrawButton(GetStartButtonRect(), "START", false);
 }
 
 // 绘制 UI 界面（2D）
-void DrawUI() {
-    if (gameStatus == LevelSelect) {
+void DrawUI()
+{
+    if (gameStatus == LevelSelect)
+    {
         DrawLevelSelectUI();
         return;
     }
@@ -829,29 +1301,64 @@ void DrawUI() {
     std::string highScoreText = "High Score: " + std::to_string(highScore);
     std::string speedText = "Speed Level: " + std::to_string(score / SPEED_UP_SCORE + 1);
     std::string levelName = "Custom";
-    if (currentLevel == 1) {
+    if (currentLevel == 1)
+    {
         levelName = "Level 1";
-    } else if (currentLevel == 2) {
+    }
+    else if (currentLevel == 2)
+    {
         levelName = "Level 2";
-    } else if (currentLevel == 3) {
+    }
+    else if (currentLevel == 3)
+    {
         levelName = "Level 3";
-    } else if (currentLevel == 4) {
+    }
+    else if (currentLevel == 4)
+    {
         levelName = "Level 4";
     }
     std::string levelText = "Level: " + levelName +
                             " | Map: " + std::to_string(gridSize) + " x " + std::to_string(gridSize);
     std::string targetText = "Target: " + std::to_string(targetScore);
+    if (crazyMode)
+    {
+        targetText = "Target: Infinite";
+    }
+    std::string modeText = "Mode: Normal";
+    if (crazyMode)
+    {
+        modeText = "Mode: Crazy";
+    }
+    if (boostTimer > 0.0f)
+    {
+        modeText += " | Boost";
+    }
+    else if (redFlashTimer > 0.0f)
+    {
+        modeText += " | Warning";
+    }
+    else if (greenFlashTimer > 0.0f)
+    {
+        modeText += " | Recover";
+    }
 
     Color scoreColor = WHITE;
-    if (scoreFlashTimer > 0.0f) {
+    if (scoreFlashTimer > 0.0f)
+    {
         scoreColor = YELLOW;
     }
 
-    DrawText(scoreText.c_str(), 20, 20, 30, scoreColor);
-    DrawText(highScoreText.c_str(), 20, 55, 22, LIGHTGRAY);
-    DrawText(speedText.c_str(), 20, 85, 22, LIGHTGRAY);
-    DrawText(targetText.c_str(), 20, 115, 22, LIGHTGRAY);
-    DrawText(levelText.c_str(), 20, 145, 22, LIGHTGRAY);
+    int scoreSize = 42;
+    int scoreWidth = MeasureText(scoreText.c_str(), scoreSize);
+    DrawText(scoreText.c_str(), (SCREEN_WIDTH - scoreWidth) / 2, 25, scoreSize, scoreColor);
+
+    std::string infoText = highScoreText + "   |   " + targetText + "   |   " + levelText + "   |   " + modeText;
+    int infoSize = 24;
+    int infoWidth = MeasureText(infoText.c_str(), infoSize);
+    DrawText(infoText.c_str(), (SCREEN_WIDTH - infoWidth) / 2, 78, infoSize, LIGHTGRAY);
+
+    int speedWidth = MeasureText(speedText.c_str(), infoSize);
+    DrawText(speedText.c_str(), (SCREEN_WIDTH - speedWidth) / 2, 110, infoSize, LIGHTGRAY);
 
     // 控制提示
     DrawText("WASD / Arrow Keys: Move", 20, SCREEN_HEIGHT - 120, 20, LIGHTGRAY);
@@ -859,25 +1366,29 @@ void DrawUI() {
     DrawText("Space: Pause | R: Restart | Esc: Quit", 20, SCREEN_HEIGHT - 45, 20, LIGHTGRAY);
 
     // 暂停提示
-    if (gameStatus == Paused) {
+    if (gameStatus == Paused)
+    {
         DrawCenterMessage("PAUSED", "Press Space to continue", YELLOW);
     }
 
     // 游戏结束提示
-    if (gameStatus == GameOver) {
+    if (gameStatus == GameOver)
+    {
         std::string resultText = "Final Score: " + std::to_string(score) + " | R restart | M menu";
         DrawCenterMessage("GAME OVER", resultText.c_str(), RED);
     }
 
     // 胜利提示
-    if (gameStatus == Win) {
+    if (gameStatus == Win)
+    {
         std::string resultText = levelName + " Clear | Score: " + std::to_string(score) + " | M menu";
         DrawCenterMessage("YOU WIN", resultText.c_str(), GREEN);
     }
 
     // 首次提示（等待按键开始）
-    if (!gameStarted && gameStatus == Playing) {
-        const char* msg = "Press WASD or Arrow Keys to start";
+    if (!gameStarted && gameStatus == Playing)
+    {
+        const char *msg = "Press WASD or Arrow Keys to start";
         int fontSize = 25;
         int textWidth = MeasureText(msg, fontSize);
         DrawText(msg, (SCREEN_WIDTH - textWidth) / 2, SCREEN_HEIGHT / 2 + 200, fontSize, (Color){200, 200, 200, 180});
@@ -885,7 +1396,8 @@ void DrawUI() {
 }
 
 // ===== 主函数 =====
-int main() {
+int main()
+{
     // 初始化随机数种子
     srand((unsigned int)time(nullptr));
 
@@ -903,20 +1415,24 @@ int main() {
     // 默认显示普通关卡参数，启动后先进入选关界面
     customSpeedLevel = 3;
     difficultyLevel = 3;
+    crazyMode = false;
     SetLevel(1);
     SetTargetScoreByDifficulty();
     gameStatus = LevelSelect;
 
     // 主循环
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose())
+    {
         HandleInput();
         UpdateGame();
         UpdateEffects();
+        UpdateCrazyMode();
 
         BeginDrawing();
         ClearBackground((Color){20, 25, 40, 255});
 
-        if (gameStatus != LevelSelect) {
+        if (gameStatus != LevelSelect)
+        {
             BeginMode3D(camera);
             DrawGame3D();
             EndMode3D();
