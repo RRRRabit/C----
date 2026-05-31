@@ -7,8 +7,8 @@
 #include <fstream>
 
 // ===== 常量参数 =====
-const int SCREEN_WIDTH = 1000;
-const int SCREEN_HEIGHT = 700;
+const int SCREEN_WIDTH = 2560;
+const int SCREEN_HEIGHT = 1440;
 
 const int DEFAULT_GRID_SIZE = 15;
 const int MIN_CUSTOM_SPEED_LEVEL = 1;
@@ -23,6 +23,12 @@ const float FOOD_FLOAT_HEIGHT = 0.15f;
 const float FOOD_FLOAT_SPEED = 4.0f;
 const float EAT_EFFECT_TIME = 0.35f;
 const float SCORE_FLASH_TIME = 0.25f;
+
+// 主菜单布局常量
+const int MENU_X = 880;
+const int MENU_Y = 150;
+const int MENU_WIDTH = 800;
+const int MENU_HEIGHT = 750;
 
 // ===== 数据结构 =====
 
@@ -96,6 +102,12 @@ void DrawCenterMessage(const char* title, const char* subtitle, Color titleColor
 void DrawLevelSelectUI();
 void DrawButton(Rectangle button, const char* text, bool selected);
 bool IsButtonClicked(Rectangle button);
+Rectangle GetLevelButtonRect(int index);
+Rectangle GetSpeedMinusButtonRect();
+Rectangle GetSpeedPlusButtonRect();
+Rectangle GetDifficultyMinusButtonRect();
+Rectangle GetDifficultyPlusButtonRect();
+Rectangle GetStartButtonRect();
 void TryChangeDirection(Cell newDirection);
 void UpdateEffects();
 void UpdateCameraPosition();
@@ -309,47 +321,85 @@ void SpawnFood() {
     }
 }
 
+// ===== 主菜单按钮坐标函数 =====
+
+Rectangle GetLevelButtonRect(int index) {
+    int buttonWidth = 155;
+    int buttonHeight = 65;
+    int buttonGap = 25;
+    int totalWidth = buttonWidth * 4 + buttonGap * 3;
+    int startX = MENU_X + (MENU_WIDTH - totalWidth) / 2;
+    int y = MENU_Y + 190;
+    return {
+        (float)(startX + index * (buttonWidth + buttonGap)),
+        (float)y,
+        (float)buttonWidth,
+        (float)buttonHeight
+    };
+}
+
+Rectangle GetSpeedMinusButtonRect() {
+    return { (float)(MENU_X + 110), (float)(MENU_Y + 400), 65.0f, 50.0f };
+}
+
+Rectangle GetSpeedPlusButtonRect() {
+    return { (float)(MENU_X + MENU_WIDTH - 175), (float)(MENU_Y + 400), 65.0f, 50.0f };
+}
+
+Rectangle GetDifficultyMinusButtonRect() {
+    return { (float)(MENU_X + 110), (float)(MENU_Y + 550), 65.0f, 50.0f };
+}
+
+Rectangle GetDifficultyPlusButtonRect() {
+    return { (float)(MENU_X + MENU_WIDTH - 175), (float)(MENU_Y + 550), 65.0f, 50.0f };
+}
+
+Rectangle GetStartButtonRect() {
+    int buttonWidth = 240;
+    int buttonHeight = 70;
+    return {
+        (float)(MENU_X + (MENU_WIDTH - buttonWidth) / 2),
+        (float)(MENU_Y + 650),
+        (float)buttonWidth,
+        (float)buttonHeight
+    };
+}
+
 // 在主页面处理鼠标点击
 void HandleLevelSelectInput() {
     for (int i = 0; i < 4; i++) {
-        Rectangle levelButton = {(float)(160 + i * 170), 180.0f, 130.0f, 55.0f};
-        if (IsButtonClicked(levelButton)) {
+        if (IsButtonClicked(GetLevelButtonRect(i))) {
             SetLevel(i + 1);
         }
     }
 
-    Rectangle speedMinusButton = {300.0f, 310.0f, 55.0f, 45.0f};
-    Rectangle speedPlusButton = {645.0f, 310.0f, 55.0f, 45.0f};
-    if (IsButtonClicked(speedMinusButton)) {
+    if (IsButtonClicked(GetSpeedMinusButtonRect())) {
         customSpeedLevel--;
         if (customSpeedLevel < MIN_CUSTOM_SPEED_LEVEL) {
             customSpeedLevel = MIN_CUSTOM_SPEED_LEVEL;
         }
     }
-    if (IsButtonClicked(speedPlusButton)) {
+    if (IsButtonClicked(GetSpeedPlusButtonRect())) {
         customSpeedLevel++;
         if (customSpeedLevel > MAX_CUSTOM_SPEED_LEVEL) {
             customSpeedLevel = MAX_CUSTOM_SPEED_LEVEL;
         }
     }
 
-    Rectangle difficultyMinusButton = {300.0f, 390.0f, 55.0f, 45.0f};
-    Rectangle difficultyPlusButton = {645.0f, 390.0f, 55.0f, 45.0f};
-    if (IsButtonClicked(difficultyMinusButton)) {
+    if (IsButtonClicked(GetDifficultyMinusButtonRect())) {
         difficultyLevel--;
         if (difficultyLevel < MIN_DIFFICULTY_LEVEL) {
             difficultyLevel = MIN_DIFFICULTY_LEVEL;
         }
     }
-    if (IsButtonClicked(difficultyPlusButton)) {
+    if (IsButtonClicked(GetDifficultyPlusButtonRect())) {
         difficultyLevel++;
         if (difficultyLevel > MAX_DIFFICULTY_LEVEL) {
             difficultyLevel = MAX_DIFFICULTY_LEVEL;
         }
     }
 
-    Rectangle startButton = {390.0f, 505.0f, 220.0f, 60.0f};
-    if (IsButtonClicked(startButton)) {
+    if (IsButtonClicked(GetStartButtonRect())) {
         StartSelectedGame();
         InitGame();
     }
@@ -369,10 +419,6 @@ void TryChangeDirection(Cell newDirection) {
 
 // 处理键盘输入
 void HandleInput() {
-    if (IsKeyPressed(KEY_F11)) {
-        ToggleFullscreen();
-    }
-
     if (gameStatus == LevelSelect) {
         HandleLevelSelectInput();
         return;
@@ -710,40 +756,65 @@ void DrawButton(Rectangle button, const char* text, bool selected) {
 
 // 绘制简单选关界面
 void DrawLevelSelectUI() {
-    const char* title = "SNAKE MENU";
-    int titleSize = 58;
-    int titleWidth = MeasureText(title, titleSize);
-    DrawText(title, (SCREEN_WIDTH - titleWidth) / 2, 55, titleSize, YELLOW);
+    // 半透明菜单面板
+    DrawRectangle(MENU_X, MENU_Y, MENU_WIDTH, MENU_HEIGHT, (Color){10, 15, 30, 200});
+    DrawRectangleLines(MENU_X, MENU_Y, MENU_WIDTH, MENU_HEIGHT, (Color){180, 180, 200, 160});
 
-    DrawText("Choose Map", 120, 140, 28, WHITE);
+    // 标题
+    const char* title = "SNAKE MENU";
+    int titleSize = 72;
+    int titleWidth = MeasureText(title, titleSize);
+    DrawText(title, (SCREEN_WIDTH - titleWidth) / 2, MENU_Y + 50, titleSize, YELLOW);
+
+    // 地图关卡区域
+    const char* mapLabel = "Choose Map";
+    int mapLabelSize = 32;
+    int mapLabelWidth = MeasureText(mapLabel, mapLabelSize);
+    DrawText(mapLabel, (SCREEN_WIDTH - mapLabelWidth) / 2, MENU_Y + 140, mapLabelSize, WHITE);
+
     for (int i = 0; i < 4; i++) {
-        Rectangle levelButton = {(float)(160 + i * 170), 180.0f, 130.0f, 55.0f};
+        Rectangle btn = GetLevelButtonRect(i);
         std::string text = "Level " + std::to_string(i + 1);
-        DrawButton(levelButton, text.c_str(), currentLevel == i + 1);
+        DrawButton(btn, text.c_str(), currentLevel == i + 1);
 
         std::string mapText = std::to_string(10 + i * 5) + " x " + std::to_string(10 + i * 5);
-        int mapTextWidth = MeasureText(mapText.c_str(), 18);
-        DrawText(mapText.c_str(), (int)(levelButton.x + (levelButton.width - mapTextWidth) / 2),
-                 (int)(levelButton.y + 63), 18, LIGHTGRAY);
+        int mapTextWidth = MeasureText(mapText.c_str(), 22);
+        DrawText(mapText.c_str(),
+                 (int)(btn.x + (btn.width - mapTextWidth) / 2),
+                 (int)(btn.y + btn.height + 8),
+                 22, LIGHTGRAY);
     }
 
-    DrawText("Speed", 300, 285, 28, WHITE);
-    DrawButton((Rectangle){300.0f, 310.0f, 55.0f, 45.0f}, "-", false);
-    DrawButton((Rectangle){645.0f, 310.0f, 55.0f, 45.0f}, "+", false);
-    std::string speedText = "Level " + std::to_string(customSpeedLevel);
-    int speedTextWidth = MeasureText(speedText.c_str(), 26);
-    DrawText(speedText.c_str(), (SCREEN_WIDTH - speedTextWidth) / 2, 320, 26, WHITE);
+    // 速度调节区域
+    const char* speedLabel = "Speed";
+    int speedLabelSize = 32;
+    int speedLabelWidth = MeasureText(speedLabel, speedLabelSize);
+    DrawText(speedLabel, (SCREEN_WIDTH - speedLabelWidth) / 2, MENU_Y + 340, speedLabelSize, WHITE);
 
-    DrawText("Difficulty Target", 300, 365, 28, WHITE);
-    DrawButton((Rectangle){300.0f, 390.0f, 55.0f, 45.0f}, "-", false);
-    DrawButton((Rectangle){645.0f, 390.0f, 55.0f, 45.0f}, "+", false);
+    DrawButton(GetSpeedMinusButtonRect(), "-", false);
+    DrawButton(GetSpeedPlusButtonRect(), "+", false);
+    std::string speedText = "Level " + std::to_string(customSpeedLevel);
+    int speedTextSize = 34;
+    int speedTextWidth = MeasureText(speedText.c_str(), speedTextSize);
+    DrawText(speedText.c_str(), (SCREEN_WIDTH - speedTextWidth) / 2, MENU_Y + 408, speedTextSize, WHITE);
+
+    // 难度目标区域
+    const char* diffLabel = "Difficulty Target";
+    int diffLabelSize = 32;
+    int diffLabelWidth = MeasureText(diffLabel, diffLabelSize);
+    DrawText(diffLabel, (SCREEN_WIDTH - diffLabelWidth) / 2, MENU_Y + 490, diffLabelSize, WHITE);
+
+    DrawButton(GetDifficultyMinusButtonRect(), "-", false);
+    DrawButton(GetDifficultyPlusButtonRect(), "+", false);
     SetTargetScoreByDifficulty();
     std::string difficultyText = "Level " + std::to_string(difficultyLevel) +
                                  "  Target " + std::to_string(targetScore);
-    int difficultyTextWidth = MeasureText(difficultyText.c_str(), 24);
-    DrawText(difficultyText.c_str(), (SCREEN_WIDTH - difficultyTextWidth) / 2, 402, 24, WHITE);
+    int diffTextSize = 32;
+    int diffTextWidth = MeasureText(difficultyText.c_str(), diffTextSize);
+    DrawText(difficultyText.c_str(), (SCREEN_WIDTH - diffTextWidth) / 2, MENU_Y + 558, diffTextSize, WHITE);
 
-    DrawButton((Rectangle){390.0f, 505.0f, 220.0f, 60.0f}, "START", false);
+    // 开始按钮
+    DrawButton(GetStartButtonRect(), "START", false);
 }
 
 // 绘制 UI 界面（2D）
