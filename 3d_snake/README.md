@@ -100,7 +100,18 @@
 3d_snake/
 ├── assets/
 │   └── menu_background.png # 背景图
-├── main.cpp          # 游戏主代码
+├── main.cpp          # 程序入口和主循环
+├── constants.h       # 常量参数
+├── types.h           # 游戏数据结构
+├── settings.*        # 关卡、速度、难度设置
+├── snake_logic.*     # 蛇移动、吃果子、碰撞、生成食物
+├── crazy_mode.*      # 疯狂模式规则
+├── input.*           # 键盘和鼠标输入
+├── draw_scene.*      # 3D 场景绘制
+├── draw_ui.*         # 菜单、按钮、分数和弹窗
+├── loading.*         # Loading 过渡
+├── assets.*          # 图片资源加载和绘制
+├── score_file.*      # 最高分读写
 ├── build.bat         # 一键编译脚本
 ├── README.md         # 项目说明
 └── third_party/
@@ -108,3 +119,15 @@
         ├── include/  # raylib 头文件
         └── lib/      # raylib 库文件
 ```
+
+## 推荐阅读顺序
+
+如果是新手阅读代码，建议按下面顺序：
+
+1. `main.cpp`：先看程序怎么启动、更新、绘制、关闭
+2. `types.h`：看游戏里保存了哪些数据
+3. `constants.h`：看各种参数在哪里统一修改
+4. `snake_logic.cpp`：看贪吃蛇核心规则
+5. `input.cpp`：看键盘和菜单点击怎么控制游戏
+6. `draw_scene.cpp` 和 `draw_ui.cpp`：看画面如何画出来
+7. `crazy_mode.cpp`：最后看疯狂模式的额外规则

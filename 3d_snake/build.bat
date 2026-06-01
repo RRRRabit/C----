@@ -8,7 +8,7 @@ set RAYLIB_INCLUDE=third_party\raylib\include
 set RAYLIB_LIB=third_party\raylib\lib
 
 echo Compiling...
-g++ main.cpp -o snake.exe ^
+g++ *.cpp -o snake.exe ^
     -I%RAYLIB_INCLUDE% ^
     -L%RAYLIB_LIB% ^
     -lraylib ^
