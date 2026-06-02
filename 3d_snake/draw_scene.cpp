@@ -1,5 +1,6 @@
 #include "draw_scene.h"
 #include "constants.h"
+#include "food_rule.h"
 #include "snake_logic.h"
 
 // draw_scene.cpp 只负责 3D 场景绘制。
@@ -146,19 +147,24 @@ void DrawWalls(const GameContext &context)
 // 函数作用：遍历蛇身并绘制整条蛇。
 void DrawSnake(const GameContext &context)
 {
-    // snake[0] 是蛇头，其余都是身体。
-    for (int i = 0; i < (int)context.game.snake.size(); i++)
-    {
-        Vector3 pos = CellToWorld(context, context.game.snake[i]); // 把蛇身格子转成 3D 坐标。
+    // snake.front() 是蛇头，其余都是身体。
+    int index = 0;
+    int totalLength = (int)context.game.snake.size();
 
-        if (i == 0)
+    for (Cell snakeCell : context.game.snake)
+    {
+        Vector3 pos = CellToWorld(context, snakeCell); // 把蛇身格子转成 3D 坐标。
+
+        if (index == 0)
         {
             DrawSnakeHead(context, pos);
         }
         else
         {
-            DrawSnakeBody(context, pos, i, (int)context.game.snake.size());
+            DrawSnakeBody(context, pos, index, totalLength);
         }
+
+        index++;
     }
 }
 
@@ -249,16 +255,11 @@ void DrawFood(const GameContext &context)
 
     Vector3 pos = CellToWorld(context, context.game.food); // 食物所在格子的 3D 坐标。
 
-    // 超级果子用金色和外圈区别普通食物。
-    if (context.game.isSuperFood)
-    {
-        DrawSphere(pos, CUBE_SIZE * 0.52f, GOLD); // 金果稍大，方便区分。
-        DrawSphereWires(pos, CUBE_SIZE * 0.64f, 10, 10, ORANGE); // 金果外圈，代码少但效果明显。
-    }
-    else
-    {
-        DrawSphere(pos, CUBE_SIZE * 0.40f, RED); // 普通食物用红色小球。
-    }
+    // 食物怎么画由 FoodRule 类体系决定。
+    // 这里用父类引用调用 Draw()，会自动执行普通果子或金色果子的绘制函数。
+    const FoodRule &foodRule = GetFoodRule(context.game.isSuperFood);
+
+    foodRule.Draw(pos);
 }
 
 // 函数作用：绘制吃到食物后的扩散爆炸效果。

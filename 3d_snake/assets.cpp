@@ -1,5 +1,6 @@
 #include "assets.h"
 #include "constants.h"
+#include "error_handling.h"
 
 // assets.cpp 负责图片资源。
 // 现在项目只有一张背景图，所以代码很短。
@@ -7,10 +8,13 @@
 // 函数作用：加载游戏需要的图片资源。
 void LoadAssets(GameContext &context)
 {
-    // 如果图片路径错误，LoadTexture 会失败。
-    // menuBackgroundLoaded 用来记录是否加载成功。
-    context.assets.menuBackground = LoadTexture(MENU_BACKGROUND_FILE); // 按文件路径加载背景图。
-    context.assets.menuBackgroundLoaded = context.assets.menuBackground.id != 0; // id 不为 0 表示加载成功。
+    // 图片加载的 throw/catch 写在 error_handling.cpp 里。
+    // 这里直接拿到加载结果，让 assets.cpp 保持简单。
+    TextureLoadResult result = LoadTextureWithExceptionHandling(MENU_BACKGROUND_FILE);
+
+    context.assets.menuBackground = result.texture;
+    context.assets.menuBackgroundLoaded = result.loaded;
+    context.assets.menuBackgroundLoadFailed = result.hadError;
 }
 
 // 函数作用：释放已经加载成功的图片资源。
@@ -21,6 +25,7 @@ void UnloadAssets(GameContext &context)
     {
         UnloadTexture(context.assets.menuBackground); // 释放显存里的贴图。
         context.assets.menuBackgroundLoaded = false; // 标记为已释放，避免重复释放。
+        context.assets.menuBackgroundLoadFailed = false;
     }
 }
 

@@ -3,9 +3,21 @@
 #include "constants.h"
 #include "settings.h"
 
-// draw_ui.cpp 负责 2D 界面：
-// 菜单、按钮、分数文字、暂停/失败/胜利提示都在这里。
-// 按钮坐标函数既给绘制使用，也给鼠标点击检测使用，避免坐标写两遍。
+// 函数作用：绘制资源加载失败提示。
+void DrawAssetWarning(const GameContext &context)
+{
+    if (!context.assets.menuBackgroundLoadFailed)
+    {
+        return;
+    }
+
+    DrawText(
+        "Warning: background image failed to load",
+        20,
+        20,
+        24,
+        (Color){255, 210, 80, 255});
+}
 
 // 函数作用：计算某个关卡按钮在屏幕上的矩形区域。
 Rectangle GetLevelButtonRect(int index)
@@ -16,8 +28,7 @@ Rectangle GetLevelButtonRect(int index)
     int buttonGap = 25; // 关卡按钮之间的间距。
 
     int totalWidth =
-        buttonWidth * LEVEL_COUNT + // 所有关卡按钮的总宽度。
-        buttonGap * (LEVEL_COUNT - 1); // 所有按钮间隔的总宽度。
+        buttonWidth * LEVEL_COUNT + buttonGap * (LEVEL_COUNT - 1);
 
     int startX = GetMenuX() + (MENU_WIDTH - totalWidth) / 2; // 让这一排按钮在菜单里居中。
     int y = MENU_Y + 190; // 关卡按钮所在的纵向位置。
@@ -26,7 +37,8 @@ Rectangle GetLevelButtonRect(int index)
         (float)(startX + index * (buttonWidth + buttonGap)), // 第 index 个按钮的 x。
         (float)y, // 按钮 y。
         (float)buttonWidth, // 按钮宽度。
-        (float)buttonHeight}; // 按钮高度。
+        (float)buttonHeight
+    };
 }
 
 // 函数作用：返回速度减号按钮的矩形区域。
@@ -254,6 +266,7 @@ void DrawLevelSelectUI(const GameContext &context)
 
     DrawButton(GetCrazyModeButtonRect(), crazyText.c_str(), context.settings.crazyMode);
     DrawButton(GetStartButtonRect(), "START", false);
+    DrawAssetWarning(context);
 }
 
 // 函数作用：根据当前游戏状态绘制菜单、分数和状态提示。
@@ -395,6 +408,8 @@ void DrawUI(const GameContext &context)
             fontSize,
             (Color){200, 200, 200, 180});
     }
+
+    DrawAssetWarning(context);
 }
 
 // 函数作用：绘制暂停、失败、胜利时居中的提示面板。

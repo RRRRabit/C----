@@ -4,6 +4,7 @@
 
 // 2D UI 绘制模块：菜单、按钮、分数、状态提示。
 void DrawUI(const GameContext &context);                                             // 根据当前状态绘制菜单或游戏 UI。
+void DrawAssetWarning(const GameContext &context);                                   // 绘制资源加载失败提示。
 void DrawLevelSelectUI(const GameContext &context);                                  // 绘制主菜单。
 void DrawCenterMessage(const char *title, const char *subtitle, Color titleColor);   // 绘制暂停/失败/胜利弹窗。
 void DrawButton(Rectangle button, const char *text, bool selected);                  // 绘制一个通用按钮。

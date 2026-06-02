@@ -1,5 +1,6 @@
 #include "score_file.h"
 #include "constants.h"
+#include "error_handling.h"
 #include <fstream>
 
 // score_file.cpp 只负责最高分文件。
@@ -8,18 +9,9 @@
 // 函数作用：从文件读取历史最高分。
 int LoadHighScore()
 {
-    // 文件不存在时，默认最高分就是 0。
-    int savedScore = 0; // 兜底值：没有文件或读取失败时用 0。
-
-    std::ifstream inputFile(HIGH_SCORE_FILE); // 打开最高分文件用于读取。
-
-    if (inputFile.is_open())
-    {
-        inputFile >> savedScore; // 文件里只保存一个整数。
-        inputFile.close(); // 读完手动关闭文件。
-    }
-
-    return savedScore; // 返回读取到的最高分。
+    // 具体 throw/catch 写在 error_handling.cpp 里。
+    // 如果文件内容坏了，这里会拿到安全默认值 0。
+    return LoadHighScoreWithExceptionHandling(HIGH_SCORE_FILE);
 }
 
 // 函数作用：把当前最高分保存到文件。

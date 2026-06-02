@@ -1,6 +1,7 @@
 #pragma once
 
 #include "raylib.h"
+#include <list>
 #include <vector>
 
 // types.h 只放数据结构，不放具体规则。
@@ -68,9 +69,9 @@ struct GameSettings
 // 一局游戏中会变化的主要数据。
 struct GameData
 {
-    // snake[0] 永远是蛇头。
-    // 后面的元素依次是蛇身。
-    std::vector<Cell> snake;
+    // snake.front() 永远是蛇头。
+    // std::list 是动态链表，适合“头部插入、尾部删除”的蛇身移动。
+    std::list<Cell> snake;
 
     // direction 是当前正在移动的方向。
     // nextDirection 是玩家刚输入、下一次移动时才生效的方向。
@@ -136,6 +137,10 @@ struct AssetData
 {
     Texture2D menuBackground;
     bool menuBackgroundLoaded;
+
+    // 背景图加载失败时为 true。
+    // UI 会根据它显示一行提示文字。
+    bool menuBackgroundLoadFailed;
 };
 
 // Loading 过渡只需要一个倒计时。
