@@ -5,126 +5,115 @@
 #include "settings.h"
 #include <cstdlib>
 
-// snake_logic.cpp 是贪吃蛇“规则”的核心文件。
-// 这里负责移动、吃食物、增长、碰撞、生成食物。
+// 贪吃蛇规则：移动、吃食物、增长、碰撞、生成食物。
 
-// 函数作用：初始化或重新开始一局游戏。
+// 初始化或重新开始一局。
 void InitGame(GameContext &context)
 {
-    // 重新开始一局时，先清空旧蛇身。
-    context.game.snake.clear(); // 清掉上一局遗留的身体格子。
+    context.game.snake.clear();
 
     // 蛇出生。
     Cell start;
-    start.x = context.settings.gridSize / 2; // x 放在地图中间。
+    start.x = context.settings.gridSize / 2;
     start.z = context.settings.gridSize / 2;
 
-    context.game.snake.push_back(start); // 链表第一个格子永远是蛇头。
+    context.game.snake.push_back(start); // 蛇头。
     context.game.snake.push_back({start.x - 1, start.z});
     context.game.snake.push_back({start.x - 2, start.z});
 
     // 初始方向向右。
-    context.game.direction = {1, 0};                     // {1, 0} 表示 x 增加，也就是向右。
-    context.game.nextDirection = context.game.direction; // 还没输入时，下一方向等于当前方向。
+    context.game.direction = {1, 0}; // x 增加，向右。
+    context.game.nextDirection = context.game.direction;
 
     // 重置一局游戏的基本状态。
-    context.game.food = {-1, -1}; // -1 表示暂时没有有效食物。
+    context.game.food = {-1, -1}; // 暂无食物。
     context.game.status = Playing;
     context.game.score = 0;
     context.game.moveTimer = 0.0f;
     context.game.started = false;
     context.game.isSuperFood = false;
-    context.game.growLeft = 0; // 一开始没有待增长次数。
+    context.game.growLeft = 0; // 剩余增长次数。
 
     // 重置临时视觉效果。
-    context.effects.eatTimer = 0.0f;         // 吃食物爆炸效果关闭。
-    context.effects.scoreFlashTimer = 0.0f;  // 分数闪烁效果关闭。
-    context.effects.lastFoodCell = {-1, -1}; // 没有上一次食物位置。
+    context.effects.eatTimer = 0.0f;
+    context.effects.scoreFlashTimer = 0.0f;
+    context.effects.lastFoodCell = {-1, -1};
 
-    // 重置疯狂模式数据。
-    // 即使普通模式也重置，保证每局开始状态干净。
-    context.crazy.blocks.clear();         // 删除上一局留下的蓝色方块。
-    context.crazy.eventTimer = 3.0f;      // 开局约 3 秒后才触发第一次疯狂事件。
-    context.crazy.boostTimer = 0.0f;      // 当前不处于加速中。
-    context.crazy.redFlashTimer = 0.0f;   // 当前没有红光预警。
-    context.crazy.greenFlashTimer = 0.0f; // 当前没有绿光恢复提示。
-    context.crazy.boostWaiting = false;   // 当前没有“红光结束后加速”的等待状态。
+    // 疯狂模式数据也重置，保证每局干净。
+    context.crazy.blocks.clear();
+    context.crazy.eventTimer = 3.0f; // 首次事件延迟。
+    context.crazy.boostTimer = 0.0f;
+    context.crazy.redFlashTimer = 0.0f;
+    context.crazy.greenFlashTimer = 0.0f;
+    context.crazy.boostWaiting = false;
 
-    // 第一颗食物在所有数据重置后生成。
-    SpawnFood(context); // 初始化完蛇身后再生成食物，避免食物刷在蛇身上。
+    SpawnFood(context); // 避免食物刷在蛇身上。
 }
 
-// 函数作用：使用菜单里的当前设置开始游戏。
+// 使用菜单设置开始游戏。
 void StartSelectedGame(GameContext &context)
 {
-    // 从菜单进入游戏时，先应用菜单设置，再初始化一局游戏。
     SetLevel(context, context.settings.currentLevel);
     SetSpeedByLevel(context, context.settings.speedLevel);
     UpdateTargetScore(context);
     InitGame(context);
 }
 
-// 函数作用：每帧更新普通贪吃蛇移动逻辑。
+// 每帧更新蛇的移动。
 void UpdateGame(GameContext &context)
 {
-    // 菜单、暂停、失败、胜利时不移动蛇。
-    bool gameIsPlaying = context.game.status == Playing; // 只有 Playing 才允许移动。
+    bool gameIsPlaying = context.game.status == Playing;
 
-    // 玩家还没按方向键时，蛇先停在原地。
-    bool snakeHasStarted = context.game.started; // false 表示玩家还没按过方向键。
+    bool snakeHasStarted = context.game.started; // 未按方向键前不移动。
 
     if (!gameIsPlaying || !snakeHasStarted)
     {
         return;
     }
 
-    context.game.moveTimer += GetFrameTime(); // 累加本帧经过的秒数。
+    context.game.moveTimer += GetFrameTime();
 
-    // moveTimer 累计到移动间隔后，蛇才移动一格。
-    // 这样可以让游戏保持“按格子移动”，更容易理解。
+    // moveTimer 累计到移动间隔后，蛇才走一格。
     if (context.game.moveTimer >= GetCurrentMoveInterval(context))
     {
-        context.game.moveTimer = 0.0f; // 走完一格后重新计时。
-        MoveSnake(context);            // 真正移动蛇一格。
+        context.game.moveTimer = 0.0f;
+        MoveSnake(context);
     }
 }
 
-// 函数作用：更新吃食物爆炸和分数闪烁的倒计时。
+// 更新临时视觉效果。
 void UpdateEffects(GameContext &context)
 {
-    // 这里统一更新临时视觉效果的倒计时。
-    // 倒计时减到 0 后，对应效果就不再绘制。
-    float deltaTime = GetFrameTime(); // 本帧耗时，用它减少倒计时。
+    float deltaTime = GetFrameTime();
 
     if (context.effects.eatTimer > 0.0f)
     {
-        context.effects.eatTimer -= deltaTime; // 倒计时越减越小，效果自然结束。
+        context.effects.eatTimer -= deltaTime;
 
         if (context.effects.eatTimer < 0.0f)
         {
-            context.effects.eatTimer = 0.0f; // 防止倒计时出现负数。
+            context.effects.eatTimer = 0.0f; // 防止负数。
         }
     }
 
     if (context.effects.scoreFlashTimer > 0.0f)
     {
-        context.effects.scoreFlashTimer -= deltaTime; // 分数闪烁也用同样的倒计时写法。
+        context.effects.scoreFlashTimer -= deltaTime;
 
         if (context.effects.scoreFlashTimer < 0.0f)
         {
-            context.effects.scoreFlashTimer = 0.0f; // 小于 0 后统一压回 0。
+            context.effects.scoreFlashTimer = 0.0f; // 防止负数。
         }
     }
 }
 
-// 函数作用：判断两个格子坐标是否相同。
+// 判断两个格子是否相同。
 bool IsSameCell(Cell a, Cell b)
 {
-    // 两个格子的 x 和 z 都相同，才算同一个格子。
-    return a.x == b.x && a.z == b.z; // 两个方向都相等，才是同一个格子。
+    return a.x == b.x && a.z == b.z;
 }
 
-// 函数作用：判断指定格子是否在蛇身上。
+// 判断格子是否在蛇身上。
 bool IsCellOnSnake(const GameContext &context, Cell cell)
 {
     for (Cell snakeCell : context.game.snake)
@@ -138,10 +127,9 @@ bool IsCellOnSnake(const GameContext &context, Cell cell)
     return false;
 }
 
-// 函数作用：判断指定格子是否有蓝色方块。
+// 判断格子是否有蓝色方块。
 bool IsCellOnCrazyBlock(const GameContext &context, Cell cell)
 {
-    // 生成食物时，只要这个格子有蓝方块，就不能放食物。
     for (int i = 0; i < (int)context.crazy.blocks.size(); i++)
     {
         if (IsSameCell(context.crazy.blocks[i].cell, cell))
@@ -153,13 +141,13 @@ bool IsCellOnCrazyBlock(const GameContext &context, Cell cell)
     return false;
 }
 
-// 函数作用：判断指定格子是否有实体蓝色障碍。
+// 判断格子是否有实体蓝色障碍。
 bool IsCellOnSolidCrazyBlock(const GameContext &context, Cell cell)
 {
     // 只有 solid 为 true 的蓝方块才会撞死蛇。
     for (int i = 0; i < (int)context.crazy.blocks.size(); i++)
     {
-        bool blockIsSolid = context.crazy.blocks[i].solid; // true 表示已经变成会撞死的实体。
+        bool blockIsSolid = context.crazy.blocks[i].solid; // 实体障碍。
         bool sameCell = IsSameCell(context.crazy.blocks[i].cell, cell);
 
         if (blockIsSolid && sameCell)
@@ -171,28 +159,27 @@ bool IsCellOnSolidCrazyBlock(const GameContext &context, Cell cell)
     return false;
 }
 
-// 函数作用：判断蛇头是否撞到地图边界。
-bool CheckWallCollision(const GameContext &context, Cell head)
+// 判断蛇头是否越界。
+bool CollisionChecker::IsWallHit(const GameContext &context, Cell head) const
 {
-    // 坐标小于 0 或大于等于地图大小，就说明蛇头出了地图。
-    bool hitLeftWall = head.x < 0;                            // x 小于 0，越过左边界。
-    bool hitRightWall = head.x >= context.settings.gridSize;  // x 太大，越过右边界。
-    bool hitTopWall = head.z < 0;                             // z 小于 0，越过上边界。
-    bool hitBottomWall = head.z >= context.settings.gridSize; // z 太大，越过下边界。
+    bool hitLeftWall = head.x < 0;
+    bool hitRightWall = head.x >= context.settings.gridSize;
+    bool hitTopWall = head.z < 0;
+    bool hitBottomWall = head.z >= context.settings.gridSize;
 
     return hitLeftWall || hitRightWall || hitTopWall || hitBottomWall;
 }
 
-// 函数作用：判断蛇头是否撞到自己的身体。
-bool CheckSelfCollision(const GameContext &context, Cell head, bool willGrow)
+// 判断蛇头是否撞到自己。
+bool CollisionChecker::IsSelfHit(const GameContext &context, Cell head, bool willGrow) const
 {
-    int checkEnd = (int)context.game.snake.size(); // 默认检查到最后一节身体。
+    int checkEnd = (int)context.game.snake.size(); // 检查到第几节。
 
     // 没吃到食物时，尾巴本回合会离开。
     // 所以可以不检查最后一节尾巴。
     if (!willGrow)
     {
-        checkEnd--; // 不增长时尾巴会走开，所以最后一节不用检查。
+        checkEnd--;
     }
 
     int index = 0;
@@ -218,67 +205,23 @@ bool CheckSelfCollision(const GameContext &context, Cell head, bool willGrow)
     return false;
 }
 
-// 函数作用：判断当前状态下蛇是否可以穿墙。
-bool CanPassWall(const GameContext &context)
+// 判断当前是否允许穿墙。
+bool CollisionChecker::CanPassWall(const GameContext &context) const
 {
     // 只有疯狂模式 + 加速中，才允许从墙的一边穿到另一边。
-    bool crazyModeIsOn = context.settings.crazyMode;      // 菜单里是否开启疯狂模式。
-    bool boostIsActive = context.crazy.boostTimer > 0.0f; // boostTimer 大于 0 表示正在加速。
+    bool crazyModeIsOn = context.settings.crazyMode;
+    bool boostIsActive = context.crazy.boostTimer > 0.0f; // 正在加速。
 
     return crazyModeIsOn && boostIsActive;
 }
 
-// 函数作用：根据当前方向计算下一格蛇头位置。
-Cell GetNextHead(const GameContext &context)
+// 判断本次移动是否失败。
+bool CollisionChecker::IsGameOver(GameContext &context, Cell head, bool willGrow) const
 {
-    // 新蛇头 = 当前蛇头 + 下一次移动方向。
-    Cell head = context.game.snake.front(); // snake.front() 是当前蛇头。
-
-    head.x += context.game.nextDirection.x; // x 加方向的 x，得到下一格 x。
-    head.z += context.game.nextDirection.z; // z 加方向的 z，得到下一格 z。
-
-    return head;
-}
-
-// 函数作用：允许穿墙时把越界蛇头移动到地图另一边。
-void WrapHeadIfNeeded(GameContext &context, Cell &head)
-{
-    // 不能穿墙时，不做任何处理。
-    if (!CanPassWall(context))
-    {
-        return;
-    }
-
-    // 能穿墙时，超出哪一边，就从相反边回来。
-    if (head.x < 0)
-    {
-        head.x = context.settings.gridSize - 1; // 从左边出去，从最右边回来。
-    }
-
-    if (head.x >= context.settings.gridSize)
-    {
-        head.x = 0; // 从右边出去，从最左边回来。
-    }
-
-    if (head.z < 0)
-    {
-        head.z = context.settings.gridSize - 1; // 从上边出去，从最下边回来。
-    }
-
-    if (head.z >= context.settings.gridSize)
-    {
-        head.z = 0; // 从下边出去，从最上边回来。
-    }
-}
-
-// 函数作用：统一判断本次移动是否会导致游戏失败。
-bool CheckGameOver(GameContext &context, Cell head, bool willGrow)
-{
-    // 这里把复杂条件拆成几个 bool，方便新手阅读。
-    bool snakeCanPassWall = CanPassWall(context);                    // 当前是否允许穿墙。
-    bool snakeHitWall = CheckWallCollision(context, head);           // 当前蛇头是否越界。
-    bool snakeHitSelf = CheckSelfCollision(context, head, willGrow); // 当前蛇头是否撞身体。
-    bool snakeHitBlueBlock = IsCellOnSolidCrazyBlock(context, head); // 当前蛇头是否撞实体蓝方块。
+    bool snakeCanPassWall = CanPassWall(context);
+    bool snakeHitWall = IsWallHit(context, head);
+    bool snakeHitSelf = IsSelfHit(context, head, willGrow);
+    bool snakeHitBlueBlock = IsCellOnSolidCrazyBlock(context, head);
 
     if (!snakeCanPassWall && snakeHitWall)
     {
@@ -298,91 +241,198 @@ bool CheckGameOver(GameContext &context, Cell head, bool willGrow)
     return false;
 }
 
-// 函数作用：如果蛇头吃到食物，就处理加分、增长和新食物。
+// 计算下一格蛇头。
+Cell SnakeMover::GetNextHead(const GameContext &context) const
+{
+    Cell head = context.game.snake.front(); // 当前蛇头。
+
+    head.x += context.game.nextDirection.x;
+    head.z += context.game.nextDirection.z;
+
+    return head;
+}
+
+// 穿墙时把蛇头移到另一边。
+void SnakeMover::WrapHeadIfNeeded(GameContext &context, Cell &head) const
+{
+    CollisionChecker checker;
+
+    if (!checker.CanPassWall(context))
+    {
+        return;
+    }
+
+    // 超出哪边，就从相反边回来。
+    if (head.x < 0)
+    {
+        head.x = context.settings.gridSize - 1;
+    }
+
+    if (head.x >= context.settings.gridSize)
+    {
+        head.x = 0;
+    }
+
+    if (head.z < 0)
+    {
+        head.z = context.settings.gridSize - 1;
+    }
+
+    if (head.z >= context.settings.gridSize)
+    {
+        head.z = 0;
+    }
+}
+
+// 根据 growLeft 决定蛇是否增长。
+void SnakeMover::UpdateLength(GameContext &context) const
+{
+    // growLeft > 0 表示本回合不删除尾巴。
+    // 蛇头已经加了新格子，不删除尾巴就等于变长。
+    if (context.game.growLeft > 0)
+    {
+        context.game.growLeft--;
+    }
+    else
+    {
+        context.game.snake.pop_back();
+    }
+}
+
+// 让蛇移动一格。
+void SnakeMover::MoveOneStep(GameContext &context) const
+{
+    CollisionChecker checker;
+
+    context.game.direction = context.game.nextDirection; // 正式采用输入方向。
+
+    // 先算出新蛇头，再根据疯狂模式决定是否穿墙。
+    Cell newHead = GetNextHead(context);
+    WrapHeadIfNeeded(context, newHead);
+
+    // willGrow 会影响撞自己检测。
+    // 不增长时，尾巴会移开；增长时，尾巴不会移开。
+    bool willGrow = IsSameCell(newHead, context.game.food); // 吃到食物就会增长。
+    bool gameOver = checker.IsGameOver(context, newHead, willGrow);
+
+    if (gameOver)
+    {
+        context.game.status = GameOver;
+        return;
+    }
+
+    context.game.snake.insert(context.game.snake.begin(), newHead); // 头部插入。
+
+    EatFoodIfNeeded(context, newHead);
+    UpdateLength(context);
+}
+
+// 判断蛇头是否越界。
+bool CheckWallCollision(const GameContext &context, Cell head)
+{
+    CollisionChecker checker;
+    return checker.IsWallHit(context, head);
+}
+
+// 判断蛇头是否撞到自己。
+bool CheckSelfCollision(const GameContext &context, Cell head, bool willGrow)
+{
+    CollisionChecker checker;
+    return checker.IsSelfHit(context, head, willGrow);
+}
+
+// 判断当前是否允许穿墙。
+bool CanPassWall(const GameContext &context)
+{
+    CollisionChecker checker;
+    return checker.CanPassWall(context);
+}
+
+// 计算下一格蛇头。
+Cell GetNextHead(const GameContext &context)
+{
+    SnakeMover mover;
+    return mover.GetNextHead(context);
+}
+
+// 穿墙时把蛇头移到另一边。
+void WrapHeadIfNeeded(GameContext &context, Cell &head)
+{
+    SnakeMover mover;
+    mover.WrapHeadIfNeeded(context, head);
+}
+
+// 判断本次移动是否失败。
+bool CheckGameOver(GameContext &context, Cell head, bool willGrow)
+{
+    CollisionChecker checker;
+    return checker.IsGameOver(context, head, willGrow);
+}
+
+// 吃到食物后处理加分、增长和新食物。
 void EatFoodIfNeeded(GameContext &context, Cell head)
 {
-    // 没吃到食物，就直接返回。
-    bool ateFood = IsSameCell(head, context.game.food); // 蛇头和食物同格才算吃到。
+    bool ateFood = IsSameCell(head, context.game.food);
 
     if (!ateFood)
     {
         return;
     }
 
-    // 记录被吃掉的食物位置，用来画爆炸效果。
-    context.effects.lastFoodCell = context.game.food;   // 记录位置给爆炸效果使用。
-    context.effects.eatTimer = EAT_EFFECT_TIME;         // 启动吃食物爆炸倒计时。
-    context.effects.scoreFlashTimer = SCORE_FLASH_TIME; // 启动分数变色倒计时。
+    // 记录食物位置，用来画爆炸效果。
+    context.effects.lastFoodCell = context.game.food;
+    context.effects.eatTimer = EAT_EFFECT_TIME;
+    context.effects.scoreFlashTimer = SCORE_FLASH_TIME;
 
     // 食物分数和增长节数由 FoodRule 类体系决定。
-    // 这里用父类引用调用虚函数，会自动执行普通果子或金色果子的子类版本。
+    // 父类引用调用虚函数，自动执行对应子类版本。
     const FoodRule &foodRule = GetFoodRule(context.game.isSuperFood);
 
     context.game.score += foodRule.GetScore();
     context.game.growLeft += foodRule.GetGrowCount();
 
-    UpdateHighScore(context); // 如果当前分更高，就保存最高分。
+    UpdateHighScore(context);
 
     // 普通模式达到目标分数就胜利。
-    // 疯狂模式没有目标分数，所以不会在这里胜利。
-    bool normalMode = !context.settings.crazyMode;                                // 疯狂模式不走目标分胜利逻辑。
-    bool reachedTargetScore = context.game.score >= context.settings.targetScore; // 是否达到菜单设定目标。
+    // 疯狂模式没有目标分数，所以不会按分数胜利。
+    bool normalMode = !context.settings.crazyMode;
+    bool reachedTargetScore = context.game.score >= context.settings.targetScore;
 
     if (normalMode && reachedTargetScore)
     {
-        context.game.status = Win;    // 普通模式达到目标分后胜利。
-        context.game.food = {-1, -1}; // 胜利后不再显示食物。
+        context.game.status = Win;
+        context.game.food = {-1, -1};
         return;
     }
 
-    SpawnFood(context); // 吃完旧食物后立刻生成下一颗。
+    SpawnFood(context);
 }
 
-// 函数作用：根据 growLeft 判断蛇是否需要增长。
+// 根据 growLeft 决定蛇是否增长。
 void UpdateSnakeLength(GameContext &context)
 {
-    // growLeft > 0 表示本回合不删除尾巴。
-    // 蛇头已经加了新格子，不删除尾巴就等于变长。
-    if (context.game.growLeft > 0)
-    {
-        context.game.growLeft--; // 消耗一次“本回合不删尾巴”的机会。
-    }
-    else
-    {
-        context.game.snake.pop_back(); // 删除尾巴，蛇长度保持不变。
-    }
+    SnakeMover mover;
+    mover.UpdateLength(context);
 }
 
-// 函数作用：让蛇按当前方向移动一格。
+// 让蛇移动一格。
 void MoveSnake(GameContext &context)
 {
-    // 把玩家最近输入的方向正式变成当前移动方向。
-    context.game.direction = context.game.nextDirection; // 正式采用上一帧记录的输入方向。
-
-    // 先算出新蛇头，再根据疯狂模式决定是否穿墙。
-    Cell newHead = GetNextHead(context); // 先算出下一格蛇头。
-    WrapHeadIfNeeded(context, newHead);  // 如果允许穿墙，就把越界坐标包回地图内。
-
-    // willGrow 会影响撞自己检测。
-    // 不增长时，尾巴会移开；增长时，尾巴不会移开。
-    bool willGrow = IsSameCell(newHead, context.game.food);    // 吃到食物时，本回合不会删尾巴。
-    bool gameOver = CheckGameOver(context, newHead, willGrow); // 插入新蛇头前先检查会不会失败。
-
-    if (gameOver)
-    {
-        context.game.status = GameOver; // 失败后状态改变，UpdateGame 下次不会继续移动。
-        return;
-    }
-
-    // 确认没撞死后，才把新蛇头插到蛇身最前面。
-    context.game.snake.insert(context.game.snake.begin(), newHead); // 新蛇头插到链表最前面。
-
-    EatFoodIfNeeded(context, newHead); // 如果新蛇头压到食物，就处理加分和增长。
-    UpdateSnakeLength(context);        // 最后决定删不删尾巴。
+    SnakeMover mover;
+    mover.MoveOneStep(context);
 }
 
-// 函数作用：在安全空格子里随机生成新的食物。
-void SpawnFood(GameContext &context)
+// 判断食物能不能放在这个格子。
+bool FoodSpawner::IsFoodCellSafe(const GameContext &context, Cell cell) const
+{
+    bool cellOnSnake = IsCellOnSnake(context, cell);
+    bool cellOnBlock = IsCellOnCrazyBlock(context, cell);
+
+    return !cellOnSnake && !cellOnBlock;
+}
+
+// 在安全空格子里生成食物。
+void FoodSpawner::Spawn(GameContext &context) const
 {
     // 先收集所有可以放食物的空格子。
     // 这样随机时不会生成到蛇身或蓝色方块上。
@@ -392,60 +442,61 @@ void SpawnFood(GameContext &context)
     {
         for (int z = 0; z < context.settings.gridSize; z++)
         {
-            Cell cell = {x, z}; // 当前正在检查的候选格子。
+            Cell cell = {x, z}; // 候选格子。
 
-            bool cellOnSnake = IsCellOnSnake(context, cell);      // 食物不能刷在蛇身上。
-            bool cellOnBlock = IsCellOnCrazyBlock(context, cell); // 食物不能刷在蓝方块上。
-
-            if (!cellOnSnake && !cellOnBlock)
+            if (IsFoodCellSafe(context, cell))
             {
-                emptyCells.push_back(cell); // 只把安全空格子加入候选列表。
+                emptyCells.push_back(cell);
             }
         }
     }
 
     if (emptyCells.empty())
     {
-        // 没有空格子，说明地图已经被占满，玩家胜利。
-        context.game.food = {-1, -1}; // 没地方放食物时隐藏食物。
-        context.game.status = Win;    // 地图被填满，直接胜利。
-        UpdateHighScore(context);     // 胜利时也检查最高分。
+        // 没有空格子，地图被占满，玩家胜利。
+        context.game.food = {-1, -1};
+        context.game.status = Win;
+        UpdateHighScore(context);
         return;
     }
 
-    int index = rand() % emptyCells.size(); // 在所有空格子里随机选一个下标。
+    int index = rand() % emptyCells.size();
 
-    context.game.food = emptyCells[index]; // 把选中的空格子作为食物位置。
+    context.game.food = emptyCells[index];
 
     // 金色超级果子只在疯狂模式出现。
-    // 普通模式下 canSpawnSuperFood 为 false，所以结果一定是普通果子。
-    bool canSpawnSuperFood = context.settings.crazyMode;              // 只有疯狂模式允许金色超级果子。
-    bool randomHitSuperFoodChance = rand() % 100 < SUPER_FOOD_CHANCE; // 0-99 随机数，小于概率就命中。
+    bool canSpawnSuperFood = context.settings.crazyMode;
+    bool randomHitSuperFoodChance = rand() % 100 < SUPER_FOOD_CHANCE;
 
     context.game.isSuperFood =
-        canSpawnSuperFood &&      // 普通模式这里是 false，所以不会生成金果。
-        randomHitSuperFoodChance; // 疯狂模式下再看随机概率。
+        canSpawnSuperFood &&
+        randomHitSuperFoodChance;
 }
 
-// 函数作用：计算当前分数和疯狂模式下的蛇移动间隔。
+// 在安全空格子里生成食物。
+void SpawnFood(GameContext &context)
+{
+    FoodSpawner spawner;
+    spawner.Spawn(context);
+}
+
+// 计算当前移动间隔。
 float GetCurrentMoveInterval(const GameContext &context)
 {
-    // 分数越高，scoreSpeedLevel 越高，移动间隔越短。
-    int scoreSpeedLevel = context.game.score / SPEED_UP_SCORE; // 每得到 SPEED_UP_SCORE 分，速度提升一级。
+    int scoreSpeedLevel = context.game.score / SPEED_UP_SCORE; // 分数速度等级。
 
     float interval =
-        context.settings.speed.startInterval -                  // 初始移动间隔。
-        scoreSpeedLevel * context.settings.speed.speedUpAmount; // 分数越高，间隔减少越多。
+        context.settings.speed.startInterval -
+        scoreSpeedLevel * context.settings.speed.speedUpAmount;
 
     if (interval < context.settings.speed.minInterval)
     {
-        interval = context.settings.speed.minInterval; // 不允许速度无限变快。
+        interval = context.settings.speed.minInterval;
     }
 
     if (context.crazy.boostTimer > 0.0f)
     {
-        // 疯狂模式加速时，移动间隔除以倍率，所以蛇会更快。
-        interval = interval / BOOST_SPEED_RATE; // 间隔变短，实际速度变快；倍率当前是 1.6。
+        interval = interval / BOOST_SPEED_RATE; // 疯狂模式加速。
     }
 
     return interval;

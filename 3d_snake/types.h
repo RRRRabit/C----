@@ -4,57 +4,41 @@
 #include <list>
 #include <vector>
 
-// types.h 只放数据结构，不放具体规则。
-// 新手可以先看这个文件，了解游戏需要保存哪些数据。
+// 数据结构入口：先看本文件了解游戏保存了哪些数据。
 
-// 地图格子坐标。
-// x 表示左右方向，z 表示前后方向。
+// 地图格子坐标：x 左右，z 前后。
 struct Cell
 {
     int x;
     int z;
 };
 
-// 疯狂模式里的蓝色方块。
-// solid 为 false 时只是闪烁预警。
-// solid 为 true 时会撞死蛇。
+// 疯狂模式蓝方块。
 struct CrazyBlock
 {
     Cell cell;
-    bool solid;
-    float flashTimer;
+    bool solid;       // false 预警，true 实体。
+    float flashTimer; // 预警倒计时。
 };
 
 enum GameStatus
 {
-    // 正在菜单界面。
     LevelSelect,
-
-    // 正在游戏。
     Playing,
-
-    // 暂停。
     Paused,
-
-    // 游戏失败。
     GameOver,
-
-    // 普通模式达到目标分数，或者地图被蛇占满。
     Win
 };
 
-// 一档速度设置包含三个值：
-// startInterval：刚开始多久移动一格。
-// minInterval：速度再快也不能小于这个间隔。
-// speedUpAmount：每次分数提高后减少多少移动间隔。
+// 一档速度设置。
 struct SpeedSetting
 {
-    float startInterval;
-    float minInterval;
-    float speedUpAmount;
+    float startInterval; // 初始移动间隔。
+    float minInterval;   // 最快间隔。
+    float speedUpAmount; // 每次提速减少多少间隔。
 };
 
-// 玩家在菜单里选择的设置，以及由设置计算出的参数。
+// 菜单设置。
 struct GameSettings
 {
     int currentLevel;
@@ -73,31 +57,21 @@ struct GameData
     // std::list 是动态链表，适合“头部插入、尾部删除”的蛇身移动。
     std::list<Cell> snake;
 
-    // direction 是当前正在移动的方向。
-    // nextDirection 是玩家刚输入、下一次移动时才生效的方向。
-    Cell direction;
-    Cell nextDirection;
+    Cell direction;     // 当前移动方向。
+    Cell nextDirection; // 下一次移动才生效。
 
-    // 当前食物所在格子。
-    // 如果 x 或 z 为 -1，表示当前没有食物。
-    Cell food;
+    Cell food; // x 或 z 为 -1 表示没有食物。
 
     GameStatus status;
     int score;
 
-    // moveTimer 用来累计时间。
-    // 累计到移动间隔后，蛇才真正走一格。
-    float moveTimer;
+    float moveTimer; // 累计到移动间隔后走一格。
 
-    // 玩家第一次按方向键之前，蛇不自动移动。
-    bool started;
+    bool started; // 第一次按方向键后变 true。
 
-    // 当前食物是否是金色超级果子。
-    bool isSuperFood;
+    bool isSuperFood; // 当前食物是否是金色果子。
 
-    // growLeft 表示接下来还有几次移动不删除尾巴。
-    // 不删除尾巴，蛇就会变长。
-    int growLeft;
+    int growLeft; // 剩余增长次数。
 };
 
 // 临时视觉效果的数据。
@@ -109,27 +83,20 @@ struct EffectData
     Cell lastFoodCell;
 };
 
-// 疯狂模式的额外状态。
-// 普通模式下这些数据基本不会起作用。
+// 疯狂模式状态。
 struct CrazyModeData
 {
-    // 蓝色障碍方块。
     std::vector<CrazyBlock> blocks;
 
-    // 下一次随机疯狂事件的倒计时。
-    float eventTimer;
+    float eventTimer; // 下一次随机事件倒计时。
 
-    // boostTimer > 0 时，蛇处于加速状态。
-    float boostTimer;
+    float boostTimer; // 加速倒计时。
 
-    // 红光是加速前的预警。
-    float redFlashTimer;
+    float redFlashTimer; // 加速前预警。
 
-    // 绿光是加速结束后的恢复提示。
-    float greenFlashTimer;
+    float greenFlashTimer; // 加速后恢复提示。
 
-    // 红光结束后是否准备进入加速。
-    bool boostWaiting;
+    bool boostWaiting; // 红光结束后是否进入加速。
 };
 
 // 图片资源。
@@ -138,9 +105,7 @@ struct AssetData
     Texture2D menuBackground;
     bool menuBackgroundLoaded;
 
-    // 背景图加载失败时为 true。
-    // UI 会根据它显示一行提示文字。
-    bool menuBackgroundLoadFailed;
+    bool menuBackgroundLoadFailed; // 背景图加载失败提示。
 };
 
 // Loading 过渡只需要一个倒计时。
@@ -149,9 +114,7 @@ struct LoadingData
     float timer;
 };
 
-// GameContext 是全项目最重要的结构。
-// 它把所有游戏数据集中放在一起，然后传给各个模块使用。
-// 这样不用写一大堆全局变量，也方便知道数据从哪里来。
+// 全项目共享的总数据。
 struct GameContext
 {
     GameSettings settings;
